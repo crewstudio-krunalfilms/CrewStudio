@@ -24,8 +24,6 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
 const provider = new GoogleAuthProvider();
-import { useState, useMemo, useEffect } from "react";
-
 /* ─── Constants ─────────────────────────────────────────────── */
 const ROLES = ["Cinematographer","Videographer","Drone Operator","Camera Assistant","Editor","Colorist","Director of Photography","Sound Engineer"];
 const DEFAULT_EVENTS = ["Mehndi","Sangeet","Haldi","Wedding Ceremony","Reception","Pre-Wedding Shoot","Engagement"];
