@@ -1,5 +1,5 @@
+import { saveData, loadData } from "./firebase";
 import { useState, useMemo, useEffect } from "react";
-
 /* ─── Constants ─────────────────────────────────────────────── */
 const ROLES = ["Cinematographer","Videographer","Drone Operator","Camera Assistant","Editor","Colorist","Director of Photography","Sound Engineer"];
 const DEFAULT_EVENTS = ["Mehndi","Sangeet","Haldi","Wedding Ceremony","Reception","Pre-Wedding Shoot","Engagement"];
@@ -17,12 +17,37 @@ const INITIAL_TEAM = [
   { id:3, name:"Palak",           role:"Cinematographer", phone:"9823456789", rate:6000, hires:[] },
   { id:4, name:"Akash Shah",      role:"Cinematographer", phone:"9812345678", rate:4000, hires:[] },
 ];
+async function loadState(key, fallback) {
 
-function loadState(key, fallback) {
+  try {
+
+    const data = await loadData(key);
+
+    return data || fallback;
+
+  } catch {
+
+    return fallback;
+  }
+}
+{
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
   catch { return fallback; }
 }
-function saveState(key, val) {
+async function saveState(key, val) {
+
+  try {
+
+    await saveData(key, val);
+
+  } catch (err) {
+
+    console.error(err);
+  }
+}
+
+{ext
+
   try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
 }
 
