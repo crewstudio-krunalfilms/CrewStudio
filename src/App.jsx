@@ -1,10 +1,14 @@
+import { useState, useMemo, useEffect } from "react";
+
 import { initializeApp } from "firebase/app";
+
 import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
   signOut
 } from "firebase/auth";
+
 const firebaseConfig = {
   apiKey: "AIzaSyBr6WV5kkiyfLNvPrZNeigrjmG4NilFAUI",
   authDomain: "crewstudio-35d88.firebaseapp.com",
@@ -20,9 +24,6 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
 const provider = new GoogleAuthProvider();
-``
-
-
 import { useState, useMemo, useEffect } from "react";
 
 /* ─── Constants ─────────────────────────────────────────────── */
