@@ -1,28 +1,4 @@
 import { useState, useMemo, useEffect } from "react";
-
-import { initializeApp } from "firebase/app";
-
-import {
-  getAuth,
-  GoogleAuthProvider,
-  signInWithPopup,
-  signOut
-} from "firebase/auth";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyBr6WV5kkiyfLNvPrZNeigrjmG4NilFAUI",
-  authDomain: "crewstudio-35d88.firebaseapp.com",
-  projectId: "crewstudio-35d88",
-  storageBucket: "crewstudio-35d88.firebasestorage.app",
-  messagingSenderId: "850782928925",
-  appId: "1:850782928925:web:a3308ca535993632f806f4",
-  measurementId: "G-PZBV4HCN17"
-};
-
-const app = initializeApp(firebaseConfig);
-
-const auth = getAuth(app);
-
 const provider = new GoogleAuthProvider();
 /* ─── Constants ─────────────────────────────────────────────── */
 const ROLES = ["Cinematographer","Videographer","Drone Operator","Camera Assistant","Editor","Colorist","Director of Photography","Sound Engineer"];
@@ -232,39 +208,6 @@ function AuthPage({ onLogin }) {
               tab==="login"?"Sign In to Studio →":"Create Account →"
             )}
           </button>
-<button
-  onClick={async () => {
-    try {
-      const result = await signInWithPopup(auth, provider);
-
-      const userData = {
-        name: result.user.displayName || "User",
-        email: result.user.email,
-        loggedIn: true
-      };
-
-      saveState("crew_session", userData);
-
-      onLogin(userData);
-
-    } catch (err) {
-      alert(err.message);
-    }
-  }}
-  style={{
-    width: "100%",
-    marginTop: "12px",
-    padding: "16px",
-    background: "#111",
-    color: "#e8e0d4",
-    border: "1px solid #2a2420",
-    borderRadius: "6px",
-    fontSize: "15px",
-    cursor: "pointer"
-  }}
->
-  Continue with Google
-</button>
           {/* Switch tab link */}
           <p style={{textAlign:"center",marginTop:20,fontSize:13,color:"#3a3028"}}>
             {tab==="login"?"Don't have an account? ":"Already have an account? "}
