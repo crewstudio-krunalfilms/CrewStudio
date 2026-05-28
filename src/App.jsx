@@ -37,6 +37,7 @@ function AuthPage({ onLogin }) {
   const [showPass, setShowPass] = useState(false);
 
   function handleLogin() {
+    
     setError("");
     if (!form.email || !form.password) { setError("Please fill in all fields."); return; }
     const users = loadState("crew_users", []);
@@ -49,25 +50,41 @@ function AuthPage({ onLogin }) {
       onLogin(user);
     }, 800);
   }
-function handleSignup() {
+function handleLogin() {
 
   setError("");
 
-  if (!form.name || !form.email || !form.password) {
-    setError("Please fill all fields.");
-    return;
-  }
-
-  if (form.password !== form.confirm) {
-    setError("Passwords do not match.");
+  if (!form.email || !form.password) {
+    setError("Please fill in all fields.");
     return;
   }
 
   const users = loadState("crew_users", []);
 
-  const alreadyExists = users.find(
-    u => u.email === form.email
+  const user = users.find(
+    u => u.email === form.email.toLowerCase().trim()
   );
+
+  if (!user) {
+    setError("No account found with this email.");
+    return;
+  }
+
+  if (user.password !== form.password) {
+    setError("Incorrect password.");
+    return;
+  }
+
+  const sessionUser = {
+    name: user.name,
+    email: user.email,
+    loggedIn: true
+  };
+
+  saveState("crew_session", sessionUser);
+
+  onLogin(sessionUser);
+}
 
   if (alreadyExists) {
     setError("Account already exists.");
