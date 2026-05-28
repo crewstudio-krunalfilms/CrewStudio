@@ -1,10 +1,10 @@
 {
   "files": {
-    "main.js": "/CrewStudio/static/js/main.4cfbaff6.js",
+    "main.js": "/CrewStudio/static/js/main.d0fae386.js",
     "index.html": "/CrewStudio/index.html",
-    "main.4cfbaff6.js.map": "/CrewStudio/static/js/main.4cfbaff6.js.map"
+    "main.d0fae386.js.map": "/CrewStudio/static/js/main.d0fae386.js.map"
   },
   "entrypoints": [
-    "static/js/main.4cfbaff6.js"
+    "static/js/main.d0fae386.js"
   ]
 }
