@@ -75,7 +75,7 @@ function handleLogin() {
   ) {
 
     const sessionUser = {
-      name: "Crew"
+      name: "Crew
 {
 
   setError("");
