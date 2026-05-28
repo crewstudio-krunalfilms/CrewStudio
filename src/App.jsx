@@ -33,7 +33,6 @@ function loadState(key, fallback) {
 
 }
 async function saveState(key, val) {
-
   try {
 
     await saveData(key, val);
@@ -64,12 +63,13 @@ function AuthPage({ onLogin }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
-  
+
 function handleLogin() {
 
   setError("");
 
   const ADMIN_EMAIL = "crewstudio@gmail.com";
+
   const ADMIN_PASSWORD = "Wedding@2026";
 
   if (
@@ -83,14 +83,21 @@ function handleLogin() {
       loggedIn: true
     };
 
-    localStorage.setItem(
+    saveState(
       "crew_session",
-      JSON.stringify(sessionUser)
+      sessionUser
     );
 
     onLogin(sessionUser);
 
   } else {
+
+    setError("Invalid email or password.");
+  }
+}
+
+
+  else {
 
     setError("Invalid email or password.");
   }
