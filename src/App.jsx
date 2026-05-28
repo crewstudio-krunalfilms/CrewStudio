@@ -237,6 +237,41 @@ function AuthPage({ onLogin }) {
               tab==="login"?"Sign In to Studio →":"Create Account →"
             )}
           </button>
+```jsx id="v66n9k"
+<button
+  onClick={async () => {
+    try {
+      const result = await signInWithPopup(auth, provider);
+
+      const userData = {
+        name: result.user.displayName || "User",
+        email: result.user.email,
+        loggedIn: true
+      };
+
+      saveState("crew_session", userData);
+
+      onLogin(userData);
+
+    } catch (err) {
+      alert(err.message);
+    }
+  }}
+  style={{
+    width: "100%",
+    marginTop: "12px",
+    padding: "16px",
+    background: "#111",
+    color: "#e8e0d4",
+    border: "1px solid #2a2420",
+    borderRadius: "6px",
+    fontSize: "15px",
+    cursor: "pointer"
+  }}
+>
+  Continue with Google
+</button>
+```
 
           {/* Switch tab link */}
           <p style={{textAlign:"center",marginTop:20,fontSize:13,color:"#3a3028"}}>
