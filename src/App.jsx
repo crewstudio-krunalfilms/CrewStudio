@@ -1,14 +1,10 @@
-'`js
 import { initializeApp } from "firebase/app";
-
 import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
   signOut
 } from "firebase/auth";
-``
-``js
 const firebaseConfig = {
   apiKey: "AIzaSyBr6WV5kkiyfLNvPrZNeigrjmG4NilFAUI",
   authDomain: "crewstudio-35d88.firebaseapp.com",
@@ -270,8 +266,6 @@ function AuthPage({ onLogin }) {
 >
   Continue with Google
 </button>
-``
-
           {/* Switch tab link */}
           <p style={{textAlign:"center",marginTop:20,fontSize:13,color:"#3a3028"}}>
             {tab==="login"?"Don't have an account? ":"Already have an account? "}
