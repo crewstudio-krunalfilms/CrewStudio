@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from "react";
-const provider = new GoogleAuthProvider();
 /* ─── Constants ─────────────────────────────────────────────── */
 const ROLES = ["Cinematographer","Videographer","Drone Operator","Camera Assistant","Editor","Colorist","Director of Photography","Sound Engineer"];
 const DEFAULT_EVENTS = ["Mehndi","Sangeet","Haldi","Wedding Ceremony","Reception","Pre-Wedding Shoot","Engagement"];
