@@ -13,18 +13,16 @@ const STATUS_COLOR = { Confirmed:"#4ade80", Pending:"#fbbf24", Declined:"#f87171
 const EVENT_COLOR = { "Mehndi":"#f472b6","Sangeet":"#a78bfa","Haldi":"#fbbf24","Wedding Ceremony":"#c9a96e","Reception":"#34d399","Pre-Wedding Shoot":"#60a5fa","Engagement":"#fb923c" };
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DAY_NAMES = ["S","M","T","W","T","F","S"];
-
-// --- CREDENTIALS & SETTINGS ---
 const FIXED_EMAIL = "crewstudio@gmail.com";
 const FIXED_PASS  = "Weddings@2026";
-const ADMIN_WA    = "+919876543210"; // <-- REPLACE WITH YOUR ACTUAL WHATSAPP NUMBER (Keep the 91 country code)
+const ADMIN_WA    = "919876543210";
 
-// ── PASTE YOUR FIREBASE URL HERE (WHEN READY) ─────────────────
-const FIREBASE_URL = "https://crewstudio-35d88-default-rtdb.asia-southeast1.firebasedatabase.app";
-// ──────────────────────────────────────────────────────────────
+// ── PASTE YOUR FIREBASE URL HERE ──────────────────────────────
+// Example: "https://crew-studio-xxxxx-default-rtdb.firebaseio.com"
+const FIREBASE_URL = "https://YOUR-PROJECT-ID-default-rtdb.firebaseio.com";
+// ─────────────────────────────────────────────────────────────
 
-// FIX: Set to false to use Local Storage so the app actually loads!
-const USE_FIREBASE = false; 
+const USE_FIREBASE = true; // Firebase is always ON
 
 function evColor(ev){ return EVENT_COLOR[ev]||"#c9a96e"; }
 
@@ -51,7 +49,6 @@ async function fbSet(path, data) {
     });
   } catch(e) { console.error("Firebase write failed:", e); }
 }
-
 /* Real-time listener via Firebase SSE */
 function fbListen(path, onData) {
   if (!USE_FIREBASE) return () => {};
@@ -76,7 +73,6 @@ function RoleSelect({ value, onChange }) {
   const isCustom = value && !ROLES.includes(value);
   const [custom, setCustom] = useState(isCustom);
   const inputStyle = {background:"#111",border:"1px solid #2a2420",color:"#e8e0d4",fontFamily:"'DM Mono',monospace",fontSize:"14px",padding:"12px 14px",borderRadius:"6px",outline:"none",width:"100%",WebkitAppearance:"none"};
-  
   return (
     <div style={{display:"flex",flexDirection:"column",gap:8}}>
       <select value={custom?"＋ Custom Role":(value||ROLES[0])}
@@ -141,6 +137,7 @@ function AuthPage({ onLogin }) {
   if (isMobile) return (
     <div style={{minHeight:"100vh",background:"#060504",display:"flex",flexDirection:"column",fontFamily:"'Cormorant Garamond',Georgia,serif",color:"#e8e0d4",padding:"0"}}>
       <style>{S}</style>
+      {/* Top hero */}
       <div style={{background:"linear-gradient(160deg,#0e0b08,#060504)",borderBottom:"1px solid #1a1612",padding:"48px 28px 36px",textAlign:"center",position:"relative",overflow:"hidden"}}>
         <div style={{position:"absolute",inset:0,backgroundImage:"radial-gradient(circle at 50% 100%, #c9a96e10 0%, transparent 60%)",pointerEvents:"none"}}/>
         <div style={{display:"flex",alignItems:"baseline",justifyContent:"center",gap:10,marginBottom:16}}>
@@ -151,6 +148,8 @@ function AuthPage({ onLogin }) {
         <h1 style={{fontSize:34,fontWeight:300,lineHeight:1.15,marginBottom:10}}>Every frame<br/><em style={{fontStyle:"italic",color:"#c9a96e"}}>tells a story</em></h1>
         <p style={{fontSize:14,color:"#5a5048",fontWeight:300}}>Wedding Film Production · Ahmedabad</p>
       </div>
+
+      {/* Form */}
       <div style={{flex:1,padding:"32px 24px",display:"flex",flexDirection:"column",gap:20,animation:"fadeUp 0.5s ease both"}}>
         <div>
           <h2 style={{fontSize:28,fontWeight:300,marginBottom:4}}>Welcome back</h2>
@@ -249,7 +248,6 @@ function MiniCalendar({ selectedDates, onToggleDate, bookedMap }) {
   const ds=d=>`${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
   const prevM=()=>m===0?(setM(11),setY(y=>y-1)):setM(m=>m-1);
   const nextM=()=>m===11?(setM(0),setY(y=>y+1)):setM(m=>m+1);
-
   return (
     <div style={{background:"#0e0c0a",border:"1px solid #2a2420",borderRadius:6,padding:12,userSelect:"none"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
@@ -398,12 +396,11 @@ function TeamView({ team, weddings }) {
   const [myName,setMyName]=useState(loadState("crew_myname",""));
   const [nameInput,setNameInput]=useState("");
   const me=team.find(m=>m.name===myName);
-
   function confirmIdentity(){const found=team.find(m=>m.name.toLowerCase()===nameInput.trim().toLowerCase());if(found){setMyName(found.name);saveState("crew_myname",found.name);}else alert("Name not found.");}
   function sendWA(hire,action,memberName){const msg=`Hi Krunal! This is ${memberName}. I want to *${action}* my booking:\n\n📅 *${hire.date}*\n💍 *${hire.wedding}*\n🎬 *${hire.event}*\n🎭 Role: *${hire.hireRole}*\n⏱ ${hire.dayType}`;window.open(`https://wa.me/${ADMIN_WA}?text=${encodeURIComponent(msg)}`,"_blank");}
-  
+
   const S=`@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=DM+Mono:wght@300;400&display=swap');*{box-sizing:border-box;margin:0;padding:0;}input{background:#111;border:1px solid #2a2420;color:#e8e0d4;font-family:'DM Mono',monospace;font-size:16px;padding:14px 16px;border-radius:6px;outline:none;width:100%;}`;
-  
+
   if(!myName) return (
     <div style={{minHeight:"100vh",background:"#0a0a0a",display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"'Cormorant Garamond',Georgia,serif",color:"#e8e0d4"}}>
       <style>{S}</style>
@@ -495,7 +492,6 @@ function AdminApp({ user, onLogout }) {
       return next;
     });
   }
-
   function setWeddings(v){
     setWeddingsRaw(prev=>{
       const next=typeof v==="function"?v(prev):v;
@@ -571,11 +567,14 @@ function AdminApp({ user, onLogout }) {
   .mob-nav-label{font-size:9px;font-family:'DM Mono',monospace;letter-spacing:0.08em;text-transform:uppercase;color:#3a3028;margin-top:2px;}`;
 
   const modalClass = isMobile ? "overlay" : "overlay modal-desktop";
+  const modalStyle = isMobile ? {} : {};
 
   /* ── MOBILE LAYOUT ── */
   if (isMobile) return (
     <div style={{minHeight:"100vh",background:"#0a0a0a",fontFamily:"'Cormorant Garamond',Georgia,serif",color:"#e8e0d4",paddingBottom:70}}>
       <style>{S}</style>
+
+      {/* Mobile Header */}
       <div style={{background:"#0e0c0a",borderBottom:"1px solid #1e1a16",padding:"14px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",alignItems:"baseline",gap:8}}>
           <span style={{fontSize:18,fontWeight:300,letterSpacing:"0.06em"}}>CREW</span>
@@ -587,8 +586,11 @@ function AdminApp({ user, onLogout }) {
           <button onClick={onLogout} style={{background:"none",border:"1px solid #2a2420",color:"#5a5048",fontSize:11,padding:"6px 10px",borderRadius:4,fontFamily:"'DM Mono',monospace"}}>↩</button>
         </div>
       </div>
-      
+
+      {/* Page Content */}
       <div style={{padding:"20px 16px"}}>
+
+        {/* DASHBOARD mobile */}
         {view==="dashboard"&&(
           <div className="fade-in">
             <p style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048",textTransform:"uppercase",letterSpacing:"0.15em"}}>Overview</p>
@@ -615,6 +617,7 @@ function AdminApp({ user, onLogout }) {
           </div>
         )}
 
+        {/* TEAM mobile */}
         {view==="team"&&(
           <div className="fade-in">
             <h1 style={{fontSize:28,fontWeight:300,marginBottom:20}}>Team</h1>
@@ -636,6 +639,7 @@ function AdminApp({ user, onLogout }) {
           </div>
         )}
 
+        {/* MEMBER DETAIL mobile */}
         {view==="member-detail"&&selectedMember&&(()=>{
           const m=team.find(t=>t.id===selectedMember.id)||selectedMember;
           return (
@@ -681,6 +685,7 @@ function AdminApp({ user, onLogout }) {
           );
         })()}
 
+        {/* WEDDINGS mobile */}
         {view==="weddings"&&(
           <div className="fade-in">
             <h1 style={{fontSize:28,fontWeight:300,marginBottom:20}}>Weddings</h1>
@@ -707,6 +712,7 @@ function AdminApp({ user, onLogout }) {
           </div>
         )}
 
+        {/* WEDDING DETAIL mobile */}
         {view==="wedding-detail"&&selectedWedding&&(()=>{
           const w=weddings.find(x=>x.id===selectedWedding.id)||selectedWedding;
           return (
@@ -729,6 +735,7 @@ function AdminApp({ user, onLogout }) {
           );
         })()}
 
+        {/* CALENDAR mobile */}
         {view==="calendar"&&(
           <div className="fade-in">
             <h1 style={{fontSize:28,fontWeight:300,marginBottom:20}}>Calendar</h1>
@@ -736,6 +743,8 @@ function AdminApp({ user, onLogout }) {
           </div>
         )}
       </div>
+
+      {/* Bottom Nav */}
       <div style={{position:"fixed",bottom:0,left:0,right:0,background:"#0a0a0a",borderTop:"1px solid #1e1a16",display:"flex",zIndex:100,paddingBottom:"env(safe-area-inset-bottom)"}}>
         {NAV_ITEMS.map(n=>(
           <button key={n.id} className={`mob-nav ${view===n.id||view==="member-detail"&&n.id==="team"||view==="wedding-detail"&&n.id==="weddings"?"active":""}`} onClick={()=>setView(n.id)}>
@@ -744,6 +753,8 @@ function AdminApp({ user, onLogout }) {
           </button>
         ))}
       </div>
+
+      {/* Modals */}
       {renderModals()}
     </div>
   );
@@ -762,8 +773,8 @@ function AdminApp({ user, onLogout }) {
           <button onClick={onLogout} style={{background:"none",border:"1px solid #2a2420",color:"#5a5048",fontSize:11,padding:"6px 14px",borderRadius:3,fontFamily:"'DM Mono',monospace"}}>Sign Out</button>
         </div>
       </div>
-      
       <div style={{padding:"32px",maxWidth:1280,margin:"0 auto"}}>
+        {/* Desktop views - same structure but full layout */}
         {view==="dashboard"&&(<div className="fade-in">
           <div style={{marginBottom:36}}><p style={{fontSize:11,fontFamily:"'DM Mono',monospace",letterSpacing:"0.18em",color:"#5a5048",textTransform:"uppercase"}}>Overview</p><h1 style={{fontSize:42,fontWeight:300,marginTop:4}}>Dashboard</h1></div>
           <div style={{background:"#0e0c0a",border:"1px solid #c9a96e33",borderRadius:6,padding:"16px 20px",marginBottom:32,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
@@ -910,7 +921,7 @@ function AdminApp({ user, onLogout }) {
         </div>
         <div style={{display:"flex",gap:10,marginTop:20}}><button className="btn-gold" style={{flex:1}} onClick={saveWedding}>{editWedding?"Save Changes":"Save Wedding"}</button><button className="btn-ghost" onClick={()=>setShowAddWedding(false)}>Cancel</button></div>
       </div></div>)}
-      
+
       {showAddMember&&(<div className={mClass} onClick={()=>setShowAddMember(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}><h2 style={{fontSize:22,fontWeight:400}}>Add Member</h2><button onClick={()=>setShowAddMember(false)} style={{background:"none",border:"none",color:"#5a5048",fontSize:22}}>×</button></div>
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
@@ -921,7 +932,7 @@ function AdminApp({ user, onLogout }) {
         </div>
         <div style={{display:"flex",gap:10,marginTop:20}}><button className="btn-gold" style={{flex:1}} onClick={addMember}>Add Member</button><button className="btn-ghost" onClick={()=>setShowAddMember(false)}>Cancel</button></div>
       </div></div>)}
-      
+
       {editMember&&(<div className={mClass} onClick={()=>setEditMember(null)}><div className="modal" onClick={e=>e.stopPropagation()}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}><h2 style={{fontSize:22,fontWeight:400}}>Edit Member</h2><button onClick={()=>setEditMember(null)} style={{background:"none",border:"none",color:"#5a5048",fontSize:22}}>×</button></div>
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
@@ -932,7 +943,7 @@ function AdminApp({ user, onLogout }) {
         </div>
         <div style={{display:"flex",gap:10,marginTop:20}}><button className="btn-gold" style={{flex:1}} onClick={saveEditMember}>Save Changes</button><button className="btn-ghost" onClick={()=>setEditMember(null)}>Cancel</button></div>
       </div></div>)}
-      
+
       {showAddHire&&(()=>{const m=team.find(x=>x.id===showAddHire);const eventDays=getWeddingEventDays(hireForm.wedding);return(
         <div className={mClass} onClick={()=>setShowAddHire(null)}><div className="modal" onClick={e=>e.stopPropagation()}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}><h2 style={{fontSize:22,fontWeight:400}}>Add Hire · {m?.name.split(" ")[0]}</h2><button onClick={()=>setShowAddHire(null)} style={{background:"none",border:"none",color:"#5a5048",fontSize:22}}>×</button></div>
@@ -958,7 +969,7 @@ function AdminApp({ user, onLogout }) {
           <div style={{display:"flex",gap:10,marginTop:20}}><button className="btn-gold" style={{flex:1}} onClick={()=>addBulkHire(showAddHire)}>Assign{hireForm.selectedEventDays.length>0?` (${hireForm.selectedEventDays.length})`:""}</button><button className="btn-ghost" onClick={()=>setShowAddHire(null)}>Cancel</button></div>
         </div></div>
       );})()}
-      
+
       {editHire&&(()=>{const m=team.find(x=>x.id===editHire.memberId);const h=m?.hires[editHire.hireIdx];if(!h)return null;return(
         <div className={mClass} onClick={()=>setEditHire(null)}><div className="modal" onClick={e=>e.stopPropagation()}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}><h2 style={{fontSize:22,fontWeight:400}}>Edit Hire</h2><button onClick={()=>setEditHire(null)} style={{background:"none",border:"none",color:"#5a5048",fontSize:22}}>×</button></div>
@@ -1008,6 +1019,5 @@ export default function Root() {
   }
 
   if (!session?.loggedIn) return <AuthPage onLogin={user=>setSession(user)}/>;
-  
   return <AdminApp user={session} onLogout={()=>{saveState("crew_session",null);setSession(null);}}/>;
 }
