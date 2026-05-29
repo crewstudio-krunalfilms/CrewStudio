@@ -13,10 +13,10 @@ const ADMIN_WA    = "919876543210";
 
 // ── PASTE YOUR FIREBASE URL HERE ──────────────────────────────
 // Example: "https://crew-studio-xxxxx-default-rtdb.firebaseio.com"
-const FIREBASE_URL = "https://YOUR-PROJECT-ID-default-rtdb.firebaseio.com";
+const FIREBASE_URL = "https://crewstudio-35d88-default-rtdb.asia-southeast1.firebasedatabase.app/";
 // ─────────────────────────────────────────────────────────────
 
-const USE_FIREBASE = FIREBASE_URL && !FIREBASE_URL.includes("YOUR-PROJECT");
+const USE_FIREBASE = FIREBASE_URL && !FIREBASE_URL.includes("crewstudio");
 
 function evColor(ev){ return EVENT_COLOR[ev]||"#c9a96e"; }
 
@@ -966,10 +966,32 @@ function AdminApp({ user, onLogout }) {
 export default function Root() {
   const isTeamView = window.location.hash === "#team";
   const [session, setSession] = useState(()=>loadState("crew_session", null));
-  const [teamData] = useState(()=>loadState("crew_team", INITIAL_TEAM));
-  const [weddingsData] = useState(()=>loadState("crew_weddings", []));
+  const [teamData, setTeamData] = useState(()=>loadState("crew_team", INITIAL_TEAM));
+  const [weddingsData, setWeddingsData] = useState(()=>loadState("crew_weddings", []));
+  const [portalReady, setPortalReady] = useState(!isTeamView || !USE_FIREBASE);
 
-  if (isTeamView) return <TeamView team={teamData} weddings={weddingsData}/>;
+  // For crew portal: load live data from Firebase
+  useEffect(()=>{
+    if(!isTeamView || !USE_FIREBASE) return;
+    (async()=>{
+      const [fbTeam, fbWeddings] = await Promise.all([fbGet("crew_team"), fbGet("crew_weddings")]);
+      if(fbTeam) setTeamData(fbTeam);
+      if(fbWeddings) setWeddingsData(Array.isArray(fbWeddings)?fbWeddings:Object.values(fbWeddings||{}));
+      setPortalReady(true);
+    })();
+  },[]);
+
+  if(isTeamView){
+    if(!portalReady) return(
+      <div style={{minHeight:"100vh",background:"#0a0a0a",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,fontFamily:"'DM Mono',monospace",color:"#5a5048"}}>
+        <style>{`@keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}`}</style>
+        <div style={{width:36,height:36,border:"2px solid #2a2420",borderTopColor:"#c9a96e",borderRadius:"50%",animation:"spin 0.9s linear infinite"}}/>
+        <p style={{fontSize:12,letterSpacing:"0.15em",textTransform:"uppercase"}}>Loading your schedule…</p>
+      </div>
+    );
+    return <TeamView team={teamData} weddings={weddingsData}/>;
+  }
+
   if (!session?.loggedIn) return <AuthPage onLogin={user=>setSession(user)}/>;
   return <AdminApp user={session} onLogout={()=>{saveState("crew_session",null);setSession(null);}}/>;
 }
