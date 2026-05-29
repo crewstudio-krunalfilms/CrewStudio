@@ -24,7 +24,7 @@ const FIREBASE_URL = "https://crewstudio-35d88-default-rtdb.asia-southeast1.fire
 // ──────────────────────────────────────────────────────────────
 
 // FIX: Set to false to use Local Storage so the app actually loads!
-const USE_FIREBASE = true; 
+const USE_FIREBASE = false; 
 
 function evColor(ev){ return EVENT_COLOR[ev]||"#c9a96e"; }
 
