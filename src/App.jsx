@@ -13,10 +13,10 @@ const ADMIN_WA    = "919876543210";
 
 // ── PASTE YOUR FIREBASE URL HERE ──────────────────────────────
 // Example: "https://crew-studio-xxxxx-default-rtdb.firebaseio.com"
-const FIREBASE_URL = "https://crewstudio-35d88-default-rtdb.asia-southeast1.firebasedatabase.app/";
+const FIREBASE_URL = "https://crewstudio-35d88-default-rtdb.asia-southeast1.firebasedatabase.app";
 // ─────────────────────────────────────────────────────────────
 
-const USE_FIREBASE = FIREBASE_URL && !FIREBASE_URL.includes("crewstudio");
+const USE_FIREBASE = true;
 
 function evColor(ev){ return EVENT_COLOR[ev]||"#c9a96e"; }
 
