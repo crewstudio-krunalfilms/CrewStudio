@@ -11,6 +11,13 @@ const FIXED_EMAIL = "crewstudio@gmail.com";
 const FIXED_PASS  = "Weddings@2026";
 const ADMIN_WA    = "919876543210";
 
+// ── PASTE YOUR FIREBASE URL HERE ──────────────────────────────
+// Example: "https://crew-studio-xxxxx-default-rtdb.firebaseio.com"
+const FIREBASE_URL = "https://YOUR-PROJECT-ID-default-rtdb.firebaseio.com";
+// ─────────────────────────────────────────────────────────────
+
+const USE_FIREBASE = FIREBASE_URL && !FIREBASE_URL.includes("YOUR-PROJECT");
+
 function evColor(ev){ return EVENT_COLOR[ev]||"#c9a96e"; }
 
 const INITIAL_TEAM = [
@@ -20,6 +27,33 @@ const INITIAL_TEAM = [
   { id:4, name:"Akash Shah",      role:"Cinematographer", phone:"9812345678", rate:4000, hires:[] },
 ];
 
+/* ── Firebase helpers ── */
+async function fbGet(path) {
+  try {
+    const res = await fetch(`${FIREBASE_URL}/${path}.json`);
+    return await res.json();
+  } catch { return null; }
+}
+async function fbSet(path, data) {
+  try {
+    await fetch(`${FIREBASE_URL}/${path}.json`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+  } catch(e) { console.error("Firebase write failed:", e); }
+}
+/* Real-time listener via Firebase SSE */
+function fbListen(path, onData) {
+  if (!USE_FIREBASE) return () => {};
+  const source = new EventSource(`${FIREBASE_URL}/${path}.json`);
+  source.addEventListener("put", e => {
+    try { const d = JSON.parse(e.data); if (d?.data !== undefined) onData(d.data); } catch {}
+  });
+  return () => source.close();
+}
+
+/* localStorage fallback */
 function loadState(key, fallback) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
   catch { return fallback; }
@@ -407,8 +441,47 @@ function AdminApp({ user, onLogout }) {
   const isMobile=useIsMobile();
   const [team,setTeamRaw]=useState(()=>loadState("crew_team",INITIAL_TEAM));
   const [weddings,setWeddingsRaw]=useState(()=>loadState("crew_weddings",[]));
-  function setTeam(v){const next=typeof v==="function"?v(team):v;setTeamRaw(next);saveState("crew_team",next);}
-  function setWeddings(v){const next=typeof v==="function"?v(weddings):v;setWeddingsRaw(next);saveState("crew_weddings",next);}
+  const [syncing,setSyncing]=useState(USE_FIREBASE);
+
+  /* Load from Firebase on mount + listen for real-time changes */
+  useEffect(()=>{
+    if(!USE_FIREBASE){setSyncing(false);return;}
+    let closeFns=[];
+    (async()=>{
+      const [fbTeam,fbWeddings]=await Promise.all([fbGet("crew_team"),fbGet("crew_weddings")]);
+      if(fbTeam)  setTeamRaw(fbTeam);
+      if(fbWeddings) setWeddingsRaw(Array.isArray(fbWeddings)?fbWeddings:Object.values(fbWeddings||{}));
+      setSyncing(false);
+    })();
+    closeFns.push(fbListen("crew_team",    d=>{ if(d) setTeamRaw(d); }));
+    closeFns.push(fbListen("crew_weddings",d=>{ if(d) setWeddingsRaw(Array.isArray(d)?d:Object.values(d||{})); }));
+    return ()=>closeFns.forEach(f=>f());
+  },[]);
+
+  function setTeam(v){
+    setTeamRaw(prev=>{
+      const next=typeof v==="function"?v(prev):v;
+      saveState("crew_team",next);
+      if(USE_FIREBASE) fbSet("crew_team",next);
+      return next;
+    });
+  }
+  function setWeddings(v){
+    setWeddingsRaw(prev=>{
+      const next=typeof v==="function"?v(prev):v;
+      saveState("crew_weddings",next);
+      if(USE_FIREBASE) fbSet("crew_weddings",next);
+      return next;
+    });
+  }
+
+  if(syncing) return(
+    <div style={{minHeight:"100vh",background:"#0a0a0a",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,fontFamily:"'DM Mono',monospace",color:"#5a5048"}}>
+      <style>{`@keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}`}</style>
+      <div style={{width:36,height:36,border:"2px solid #2a2420",borderTopColor:"#c9a96e",borderRadius:"50%",animation:"spin 0.9s linear infinite"}}/>
+      <p style={{fontSize:12,letterSpacing:"0.15em",textTransform:"uppercase"}}>Connecting to database…</p>
+    </div>
+  );
 
   const [view,setView]=useState("dashboard");
   const [selectedMember,setSelectedMember]=useState(null);
