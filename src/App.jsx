@@ -17,14 +17,14 @@ const DAY_NAMES = ["S","M","T","W","T","F","S"];
 // --- CREDENTIALS & SETTINGS ---
 const FIXED_EMAIL = "crewstudio@gmail.com";
 const FIXED_PASS  = "Weddings@2026";
-const ADMIN_WA    = "919876543210"; // <-- REPLACE WITH YOUR ACTUAL WHATSAPP NUMBER (Keep the 91 country code)
+const ADMIN_WA    = "+919876543210"; // <-- REPLACE WITH YOUR ACTUAL WHATSAPP NUMBER (Keep the 91 country code)
 
 // ── PASTE YOUR FIREBASE URL HERE (WHEN READY) ─────────────────
-const FIREBASE_URL = "https://YOUR-PROJECT-ID-default-rtdb.firebaseio.com";
+const FIREBASE_URL = "https://crewstudio-35d88-default-rtdb.asia-southeast1.firebasedatabase.app/";
 // ──────────────────────────────────────────────────────────────
 
 // FIX: Set to false to use Local Storage so the app actually loads!
-const USE_FIREBASE = false; 
+const USE_FIREBASE = true; 
 
 function evColor(ev){ return EVENT_COLOR[ev]||"#c9a96e"; }
 
