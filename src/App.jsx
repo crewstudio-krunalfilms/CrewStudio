@@ -19,10 +19,10 @@ const ADMIN_WA    = "919876543210";
 
 // ── PASTE YOUR FIREBASE URL HERE ──────────────────────────────
 // Example: "https://crew-studio-xxxxx-default-rtdb.firebaseio.com"
-const FIREBASE_URL = "https://crewstudio-35d88-default-rtdb.asia-southeast1.firebasedatabase.app";
+const FIREBASE_URL = "https://YOUR-PROJECT-ID-default-rtdb.firebaseio.com";
 // ─────────────────────────────────────────────────────────────
 
-const USE_FIREBASE = false; // Firebase is always ON
+const USE_FIREBASE = true; // Firebase is always ON
 
 function evColor(ev){ return EVENT_COLOR[ev]||"#c9a96e"; }
 
@@ -501,14 +501,6 @@ function AdminApp({ user, onLogout }) {
     });
   }
 
-  if(syncing) return(
-    <div style={{minHeight:"100vh",background:"#0a0a0a",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,fontFamily:"'DM Mono',monospace",color:"#5a5048"}}>
-      <style>{`@keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}`}</style>
-      <div style={{width:36,height:36,border:"2px solid #2a2420",borderTopColor:"#c9a96e",borderRadius:"50%",animation:"spin 0.9s linear infinite"}}/>
-      <p style={{fontSize:12,letterSpacing:"0.15em",textTransform:"uppercase"}}>Connecting to database…</p>
-    </div>
-  );
-
   const [view,setView]=useState("dashboard");
   const [selectedMember,setSelectedMember]=useState(null);
   const [selectedWedding,setSelectedWedding]=useState(null);
@@ -526,6 +518,14 @@ function AdminApp({ user, onLogout }) {
 
   const bookedMap=useMemo(()=>{const map={};team.forEach(m=>m.hires.forEach(h=>{if(!map[h.date])map[h.date]=[];map[h.date].push(m.name);}));return map;},[team]);
   const stats=useMemo(()=>({totalMembers:team.length,totalWeddings:weddings.length,totalHires:team.reduce((s,m)=>s+m.hires.length,0),confirmedHires:team.reduce((s,m)=>s+m.hires.filter(h=>h.status==="Confirmed").length,0)}),[team,weddings]);
+
+  if(syncing) return(
+    <div style={{minHeight:"100vh",background:"#0a0a0a",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,fontFamily:"'DM Mono',monospace",color:"#5a5048"}}>
+      <style>{`@keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}`}</style>
+      <div style={{width:36,height:36,border:"2px solid #2a2420",borderTopColor:"#c9a96e",borderRadius:"50%",animation:"spin 0.9s linear infinite"}}/>
+      <p style={{fontSize:12,letterSpacing:"0.15em",textTransform:"uppercase"}}>Connecting to database…</p>
+    </div>
+  );
 
   function openAddWedding(){setWForm({name:"",bride:"",groom:"",location:"",selectedDates:[],eventDays:[]});setEditWedding(null);setShowAddWedding(true);}
   function openEditWedding(w){setWForm({name:w.name,bride:w.bride,groom:w.groom,location:w.location,selectedDates:[...(w.selectedDates||[])],eventDays:[...(w.eventDays||[])]});setEditWedding(w);setShowAddWedding(true);}
