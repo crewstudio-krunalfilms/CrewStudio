@@ -516,8 +516,8 @@ function AdminApp({ user, onLogout }) {
   const [hireForm,setHireForm]=useState({wedding:"",selectedEventDays:[],status:"Confirmed",dayType:"Full Day",hireRole:ROLES[0]});
   const [editHireForm,setEditHireForm]=useState({status:"Confirmed",dayType:"Full Day",hireRole:ROLES[0]});
 
-  const bookedMap=useMemo(()=>{const map={};(team||[]).forEach(m=>m.hires.forEach(h=>{if(!map[h.date])map[h.date]=[];map[h.date].push(m.name);}));return map;},[team]);
-const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings||[]).length,totalHires:(team||[]).reduce((s,m)=>s+m.hires.length,0),confirmedHires:(team||[]).reduce((s,m)=>s+m.hires.filter(h=>h.status==="Confirmed").length,0)}),[team,weddings]);
+  const bookedMap=useMemo(()=>{const map={};(team||[]).forEach(m=>(m.hires||[]).forEach(h=>{if(!map[h.date])map[h.date]=[];map[h.date].push(m.name);}));return map;},[team]);
+const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings||[]).length,totalHires:(team||[]).reduce((s,m)=>s+(m.hires||[]).length,0),confirmedHires:(team||[]).reduce((s,m)=>s+(m.hires||[]).filter(h=>h.status==="Confirmed").length,0)}),[team,weddings]);
   
   if(syncing) return(
     <div style={{minHeight:"100vh",background:"#0a0a0a",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,fontFamily:"'DM Mono',monospace",color:"#5a5048"}}>
