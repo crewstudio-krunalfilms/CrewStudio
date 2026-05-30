@@ -474,10 +474,14 @@ function AdminApp({ user, onLogout }) {
     if(!USE_FIREBASE){setSyncing(false);return;}
     let closeFns=[];
     (async()=>{
-      const [fbTeam,fbWeddings]=await Promise.all([fbGet("crew_team"),fbGet("crew_weddings")]);
-      if(fbTeam)  setTeamRaw(fbTeam);
-      if(fbWeddings) setWeddingsRaw(Array.isArray(fbWeddings)?fbWeddings:Object.values(fbWeddings||{}));
-      setSyncing(false);
+    const [fbTeam,fbWeddings]=await Promise.all([fbGet("crew_team"),fbGet("crew_weddings")]);
+const teamToUse = fbTeam || INITIAL_TEAM;
+const weddingsToUse = fbWeddings ? (Array.isArray(fbWeddings)?fbWeddings:Object.values(fbWeddings)) : [];
+if(!fbTeam) await fbSet("crew_team", INITIAL_TEAM);
+if(!fbWeddings) await fbSet("crew_weddings", []);
+setTeamRaw(teamToUse);
+setWeddingsRaw(weddingsToUse);
+setSyncing(false);
     })();
     closeFns.push(fbListen("crew_team",    d=>{ if(d) setTeamRaw(d); }));
     closeFns.push(fbListen("crew_weddings",d=>{ if(d) setWeddingsRaw(Array.isArray(d)?d:Object.values(d||{})); }));
