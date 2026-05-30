@@ -396,6 +396,8 @@ function TeamView({ team, weddings }) {
   const [myName,setMyName]=useState(loadState("crew_myname",""));
   const [nameInput,setNameInput]=useState("");
   const me=team.find(m=>m.name===myName);
+  // If saved name no longer exists in team, reset to name picker
+  if(myName && !me){ saveState("crew_myname",""); }
   function confirmIdentity(){const found=team.find(m=>m.name.toLowerCase()===nameInput.trim().toLowerCase());if(found){setMyName(found.name);saveState("crew_myname",found.name);}else alert("Name not found.");}
   function sendWA(hire,action,memberName){const msg=`Hi Krunal! This is ${memberName}. I want to *${action}* my booking:\n\n📅 *${hire.date}*\n💍 *${hire.wedding}*\n🎬 *${hire.event}*\n🎭 Role: *${hire.hireRole}*\n⏱ ${hire.dayType}`;window.open(`https://wa.me/${ADMIN_WA}?text=${encodeURIComponent(msg)}`,"_blank");}
 
@@ -417,7 +419,7 @@ function TeamView({ team, weddings }) {
     </div>
   );
 
-  const upcomingHires=[...me.hires].sort((a,b)=>a.date.localeCompare(b.date));
+  const upcomingHires=[...(me?.hires||[])].sort((a,b)=>a.date.localeCompare(b.date));
   return (
     <div style={{minHeight:"100vh",background:"#0a0a0a",fontFamily:"'Cormorant Garamond',Georgia,serif",color:"#e8e0d4",paddingBottom:isMobile?32:0}}>
       <style>{S}</style>
@@ -429,7 +431,7 @@ function TeamView({ team, weddings }) {
         <h1 style={{fontSize:isMobile?28:36,fontWeight:300,marginBottom:2}}>{myName}</h1>
         <p style={{fontSize:13,color:"#5a5048",fontFamily:"'DM Mono',monospace",marginBottom:20}}>{me?.role} · ₹{me?.rate?.toLocaleString("en-IN")}/day</p>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:24}}>
-          {[{v:me.hires.length,l:"Hires"},{v:me.hires.filter(h=>h.status==="Confirmed").length,l:"Confirmed"},{v:`₹${me.hires.reduce((s,h)=>s+(me?.rate||0)*(h.dayType==="Half Day"?0.5:1),0).toLocaleString("en-IN")}`,l:"Payout"}].map((s,i)=>(
+          {[{v:(me?.hires||[]).length,l:"Hires"},{v:(me?.hires||[]).filter(h=>h.status==="Confirmed").length,l:"Confirmed"},{v:`₹${(me?.hires||[]).reduce((s,h)=>s+(me?.rate||0)*(h.dayType==="Half Day"?0.5:1),0).toLocaleString("en-IN")}`,l:"Payout"}].map((s,i)=>(
             <div key={i} style={{background:"#0e0c0a",border:"1px solid #1e1a16",borderRadius:6,padding:"14px 12px"}}>
               <div style={{fontSize:isMobile?20:26,fontWeight:300,color:"#c9a96e"}}>{s.v}</div>
               <div style={{fontSize:10,letterSpacing:"0.12em",textTransform:"uppercase",color:"#5a5048",marginTop:2,fontFamily:"'DM Mono',monospace"}}>{s.l}</div>
@@ -465,7 +467,8 @@ function TeamView({ team, weddings }) {
 ════════════════════════════════════════════════════════════════ */
 function AdminApp({ user, onLogout }) {
   const isMobile=useIsMobile();
-  const [team,setTeamRaw]=useState(()=>loadState("crew_team",INITIAL_TEAM));
+  const normalizeTeam=t=>(Array.isArray(t)?t:Object.values(t||{})).map(m=>({...m,hires:Array.isArray(m.hires)?m.hires:Object.values(m.hires||{})}));
+  const [team,setTeamRaw]=useState(()=>normalizeTeam(loadState("crew_team",INITIAL_TEAM)));
   const [weddings,setWeddingsRaw]=useState(()=>loadState("crew_weddings",[]));
   const [syncing,setSyncing]=useState(USE_FIREBASE);
 
@@ -475,8 +478,7 @@ function AdminApp({ user, onLogout }) {
     let closeFns=[];
     (async()=>{
       const [fbTeam,fbWeddings]=await Promise.all([fbGet("crew_team"),fbGet("crew_weddings")]);
-      const rawTeam = fbTeam || INITIAL_TEAM;
-      const teamToUse = rawTeam.map(m=>({...m, hires: m.hires||[]}));
+      const teamToUse = normalizeTeam(fbTeam || INITIAL_TEAM);
       const weddingsToUse = fbWeddings ? (Array.isArray(fbWeddings)?fbWeddings:Object.values(fbWeddings)) : [];
       if(!fbTeam) await fbSet("crew_team", INITIAL_TEAM);
       if(!fbWeddings) await fbSet("crew_weddings", []);
@@ -484,7 +486,7 @@ function AdminApp({ user, onLogout }) {
       setWeddingsRaw(weddingsToUse);
       setSyncing(false);
     })();
-    closeFns.push(fbListen("crew_team", d=>{ if(d) setTeamRaw(d.map(m=>({...m, hires: m.hires||[]}))); }));
+    closeFns.push(fbListen("crew_team", d=>{ if(d) setTeamRaw(normalizeTeam(d)); }));
     closeFns.push(fbListen("crew_weddings",d=>{ if(d) setWeddingsRaw(Array.isArray(d)?d:Object.values(d||{})); }));
     return ()=>closeFns.forEach(f=>f());
   },[]);
@@ -997,7 +999,8 @@ const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings
 export default function Root() {
   const isTeamView = window.location.hash === "#team";
   const [session, setSession] = useState(()=>loadState("crew_session", null));
-  const [teamData, setTeamData] = useState(()=>loadState("crew_team", INITIAL_TEAM));
+  const normalizeTeam=t=>(Array.isArray(t)?t:Object.values(t||{})).map(m=>({...m,hires:Array.isArray(m.hires)?m.hires:Object.values(m.hires||{})}));
+  const [teamData, setTeamData] = useState(()=>normalizeTeam(loadState("crew_team", INITIAL_TEAM)));
   const [weddingsData, setWeddingsData] = useState(()=>loadState("crew_weddings", []));
   const [portalReady, setPortalReady] = useState(!isTeamView || !USE_FIREBASE);
 
@@ -1006,7 +1009,7 @@ export default function Root() {
     if(!isTeamView || !USE_FIREBASE) return;
     (async()=>{
       const [fbTeam, fbWeddings] = await Promise.all([fbGet("crew_team"), fbGet("crew_weddings")]);
-      if(fbTeam) setTeamData(fbTeam);
+      if(fbTeam) setTeamData(normalizeTeam(fbTeam));
       if(fbWeddings) setWeddingsData(Array.isArray(fbWeddings)?fbWeddings:Object.values(fbWeddings||{}));
       setPortalReady(true);
     })();
