@@ -15,7 +15,7 @@ const MONTH_NAMES = ["January","February","March","April","May","June","July","A
 const DAY_NAMES = ["S","M","T","W","T","F","S"];
 const FIXED_EMAIL = "crewstudio@gmail.com";
 const FIXED_PASS  = "Weddings@2026";
-const ADMIN_WA    = "919876543210";
+const ADMIN_WA    = "919876543210"; // fallback only - overridden by profile
 
 // ── PASTE YOUR FIREBASE URL HERE ──────────────────────────────
 // Example: "https://crew-studio-xxxxx-default-rtdb.firebaseio.com"
@@ -445,7 +445,7 @@ function MobileCalendar({ weddings, team }) {
 }
 
 /* ─── Team View (Crew Portal) ────────────────────────────────── */
-function TeamView({ team, weddings }) {
+function TeamView({ team, weddings, adminProfile }) {
   const isMobile=useIsMobile();
   const [myName,setMyName]=useState(loadState("crew_myname",""));
   const [nameInput,setNameInput]=useState("");
@@ -453,7 +453,15 @@ function TeamView({ team, weddings }) {
   // If saved name no longer exists in team, reset to name picker
   if(myName && !me){ saveState("crew_myname",""); }
   function confirmIdentity(){const found=team.find(m=>m.name.toLowerCase()===nameInput.trim().toLowerCase());if(found){setMyName(found.name);saveState("crew_myname",found.name);}else alert("Name not found.");}
-  function sendWA(hire,action,memberName){const msg=`Hi Krunal! This is ${memberName}. I want to *${action}* my booking:\n\n📅 *${hire.date}*\n💍 *${hire.wedding}*\n🎬 *${hire.event}*\n🎭 Role: *${hire.hireRole}*\n⏱ ${hire.dayType}`;window.open(`https://wa.me/${ADMIN_WA}?text=${encodeURIComponent(msg)}`,"_blank");}
+  function sendWA(hire,action,memberName){
+    const isConfirm=action==="CONFIRM";
+    const template=isConfirm?(adminProfile?.msgConfirm||""):(adminProfile?.msgDecline||"");
+    const msg=template
+      ?template.replace(/{name}/g,memberName).replace(/{adminName}/g,adminProfile?.adminName||"Admin").replace(/{date}/g,hire.date).replace(/{wedding}/g,hire.wedding).replace(/{event}/g,hire.event).replace(/{role}/g,hire.hireRole).replace(/{dayType}/g,hire.dayType)
+      :`Hi ${adminProfile?.adminName||"Krunal"}! This is ${memberName}. I want to *${action}* my booking:\n\n📅 *${hire.date}*\n💍 *${hire.wedding}*\n🎬 *${hire.event}*\n🎭 Role: *${hire.hireRole}*\n⏱ ${hire.dayType}`;
+    const waNum=(adminProfile?.waNumber||ADMIN_WA).replace(/[^0-9]/g,"");
+    window.open(`https://wa.me/${waNum}?text=${encodeURIComponent(msg)}`,"_blank");
+  }
 
   const S=`@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=DM+Mono:wght@300;400&display=swap');*{box-sizing:border-box;margin:0;padding:0;}input{background:#111;border:1px solid #2a2420;color:#e8e0d4;font-family:'DM Mono',monospace;font-size:16px;padding:14px 16px;border-radius:6px;outline:none;width:100%;}`;
 
@@ -531,11 +539,12 @@ function AdminApp({ user, onLogout }) {
     if(!USE_FIREBASE){setSyncing(false);return;}
     let closeFns=[];
     (async()=>{
-      const [fbTeam,fbWeddings]=await Promise.all([fbGet("crew_team"),fbGet("crew_weddings")]);
+      const [fbTeam,fbWeddings,fbProfile]=await Promise.all([fbGet("crew_team"),fbGet("crew_weddings"),fbGet("crew_profile")]);
       const teamToUse = normalizeTeam(fbTeam || INITIAL_TEAM);
       const weddingsToUse = fbWeddings ? (Array.isArray(fbWeddings)?fbWeddings:Object.values(fbWeddings)) : [];
       if(!fbTeam) await fbSet("crew_team", INITIAL_TEAM);
       if(!fbWeddings) await fbSet("crew_weddings", []);
+      if(fbProfile) setProfileRaw(fbProfile);
       setTeamRaw(teamToUse);
       setWeddingsRaw(weddingsToUse);
       setSyncing(false);
@@ -576,6 +585,23 @@ function AdminApp({ user, onLogout }) {
   const [wForm,setWForm]=useState({name:"",bride:"",groom:"",location:"",selectedDates:[],eventDays:[]});
   const [hireForm,setHireForm]=useState({wedding:"",selectedEventDays:[],status:"Confirmed",dayType:"Full Day",hireRole:ROLES[0]});
   const [editHireForm,setEditHireForm]=useState({status:"Confirmed",dayType:"Full Day",hireRole:ROLES[0]});
+  const [profile,setProfileRaw]=useState(()=>loadState("crew_profile",{
+    adminName:"Krunal Prajapati",
+    studioName:"Crew Studio",
+    waNumber:"919876543210",
+    city:"Ahmedabad",
+    msgBooking:"Hi {name}! You\'ve been booked:\n\n💍 *{wedding}*\n🎬 *{event}*\n📅 *{date}*\n🎭 {role}\n⏱ {dayType}\n💰 ₹{amount}\n\nPlease confirm.",
+    msgConfirm:"Hi {adminName}! This is {name}. I want to *CONFIRM* my booking:\n\n📅 *{date}*\n💍 *{wedding}*\n🎬 *{event}*\n🎭 Role: *{role}*\n⏱ {dayType}",
+    msgDecline:"Hi {adminName}! This is {name}. I want to *DECLINE* my booking:\n\n📅 *{date}*\n💍 *{wedding}*\n🎬 *{event}*\n🎭 Role: *{role}*\n⏱ {dayType}",
+  }));
+  function setProfile(v){
+    setProfileRaw(prev=>{
+      const next=typeof v==="function"?v(prev):v;
+      saveState("crew_profile",next);
+      if(USE_FIREBASE) fbSet("crew_profile",next);
+      return next;
+    });
+  }
 
   const bookedMap=useMemo(()=>{const map={};(team||[]).forEach(m=>(m.hires||[]).forEach(h=>{if(!map[h.date])map[h.date]=[];map[h.date].push(m.name);}));return map;},[team]);
 const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings||[]).length,totalHires:(team||[]).reduce((s,m)=>s+(m.hires||[]).length,0),confirmedHires:(team||[]).reduce((s,m)=>s+(m.hires||[]).filter(h=>h.status==="Confirmed").length,0)}),[team,weddings]);
@@ -602,9 +628,22 @@ const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings
   function saveEditHire(){setTeam(team.map(m=>m.id===editHire.memberId?{...m,hires:m.hires.map((h,i)=>i===editHire.hireIdx?{...h,...editHireForm}:h)}:m));setEditHire(null);}
   function removeHire(memberId,idx){setTeam(team.map(m=>m.id===memberId?{...m,hires:m.hires.filter((_,i)=>i!==idx)}:m));}
   function getWeddingEventDays(weddingName){const w=weddings.find(x=>x.name===weddingName);return w?(w.eventDays||[]):[]; }
-  function sendWAToMember(member,hire){const msg=`Hi ${member.name.split(" ")[0]}! You've been booked:\n\n💍 *${hire.wedding}*\n🎬 *${hire.event}*\n📅 *${hire.date}*\n🎭 ${hire.hireRole||member.role}\n⏱ ${hire.dayType||"Full Day"}\n💰 ₹${(member.rate*(hire.dayType==="Half Day"?0.5:1)).toLocaleString("en-IN")}\n\nPlease confirm.`;window.open(`https://wa.me/91${member.phone}?text=${encodeURIComponent(msg)}`,"_blank");}
+  function sendWAToMember(member,hire){
+    const amount=(member.rate*(hire.dayType==="Half Day"?0.5:1)).toLocaleString("en-IN");
+    const msg=(profile.msgBooking||"Hi {name}! Booked.")
+      .replace(/{name}/g,member.name.split(" ")[0])
+      .replace(/{wedding}/g,hire.wedding)
+      .replace(/{event}/g,hire.event)
+      .replace(/{date}/g,hire.date)
+      .replace(/{role}/g,hire.hireRole||member.role)
+      .replace(/{dayType}/g,hire.dayType||"Full Day")
+      .replace(/{amount}/g,`₹${amount}`)
+      .replace(/{adminName}/g,profile.adminName||"Admin");
+    const waNum=(profile.waNumber||ADMIN_WA).replace(/\D/g,"");
+    window.open(`https://wa.me/${waNum}?text=${encodeURIComponent(msg)}`,"_blank");
+  }
 
-  const NAV_ITEMS=[{id:"dashboard",icon:"◈",label:"Home"},{id:"team",icon:"◉",label:"Team"},{id:"weddings",icon:"◇",label:"Events"},{id:"calendar",icon:"▦",label:"Calendar"}];
+  const NAV_ITEMS=[{id:"dashboard",icon:"◈",label:"Home"},{id:"team",icon:"◉",label:"Team"},{id:"weddings",icon:"◇",label:"Events"},{id:"calendar",icon:"▦",label:"Calendar"},{id:"profile",icon:"◎",label:"Profile"}];
 
   const S=`@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300&family=DM+Mono:wght@300;400&display=swap');
   *{box-sizing:border-box;margin:0;padding:0;}
@@ -803,6 +842,44 @@ const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings
             <MobileCalendar weddings={weddings} team={team}/>
           </div>
         )}
+
+        {/* PROFILE mobile */}
+        {view==="profile"&&(
+          <div className="fade-in">
+            <h1 style={{fontSize:28,fontWeight:300,marginBottom:20}}>Profile</h1>
+            <div style={{display:"flex",flexDirection:"column",gap:14,marginBottom:20}}>
+              <div style={{background:"#0e0c0a",border:"1px solid #1e1a16",borderRadius:8,padding:20}}>
+                <p style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:14}}>Studio Info</p>
+                <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                  <div><label style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048",display:"block",marginBottom:5}}>YOUR NAME</label>
+                    <input value={profile.adminName||""} onChange={e=>setProfile({...profile,adminName:e.target.value})} placeholder="Your full name"/></div>
+                  <div><label style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048",display:"block",marginBottom:5}}>STUDIO NAME</label>
+                    <input value={profile.studioName||""} onChange={e=>setProfile({...profile,studioName:e.target.value})} placeholder="Studio name"/></div>
+                  <div><label style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048",display:"block",marginBottom:5}}>CITY</label>
+                    <input value={profile.city||""} onChange={e=>setProfile({...profile,city:e.target.value})} placeholder="City"/></div>
+                  <div><label style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048",display:"block",marginBottom:5}}>WHATSAPP NUMBER</label>
+                    <input value={profile.waNumber||""} onChange={e=>setProfile({...profile,waNumber:e.target.value.replace(/[^0-9]/g,"")})} placeholder="919876543210"/>
+                    <p style={{fontSize:10,color:"#3a3028",fontFamily:"'DM Mono',monospace",marginTop:4}}>Include country code e.g. 91...</p></div>
+                </div>
+              </div>
+              <div style={{background:"#0e0c0a",border:"1px solid #1e1a16",borderRadius:8,padding:20}}>
+                <p style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:6}}>Message Templates</p>
+                <p style={{fontSize:10,color:"#3a3028",fontFamily:"'DM Mono',monospace",marginBottom:14}}>Use: {"{name}"} {"{wedding}"} {"{event}"} {"{date}"} {"{role}"} {"{dayType}"} {"{amount}"} {"{adminName}"}</p>
+                <div style={{display:"flex",flexDirection:"column",gap:14}}>
+                  <div><label style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#c9a96e",display:"block",marginBottom:5}}>📨 BOOKING (ADMIN → CREW)</label>
+                    <textarea value={profile.msgBooking||""} onChange={e=>setProfile({...profile,msgBooking:e.target.value})} rows={4} style={{background:"#111",border:"1px solid #2a2420",color:"#e8e0d4",fontFamily:"'DM Mono',monospace",fontSize:12,padding:"10px 12px",borderRadius:6,outline:"none",width:"100%",resize:"vertical",lineHeight:1.6}}/></div>
+                  <div><label style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#4ade80",display:"block",marginBottom:5}}>✓ CONFIRM (CREW → ADMIN)</label>
+                    <textarea value={profile.msgConfirm||""} onChange={e=>setProfile({...profile,msgConfirm:e.target.value})} rows={4} style={{background:"#111",border:"1px solid #2a2420",color:"#e8e0d4",fontFamily:"'DM Mono',monospace",fontSize:12,padding:"10px 12px",borderRadius:6,outline:"none",width:"100%",resize:"vertical",lineHeight:1.6}}/></div>
+                  <div><label style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#f87171",display:"block",marginBottom:5}}>✗ DECLINE (CREW → ADMIN)</label>
+                    <textarea value={profile.msgDecline||""} onChange={e=>setProfile({...profile,msgDecline:e.target.value})} rows={4} style={{background:"#111",border:"1px solid #2a2420",color:"#e8e0d4",fontFamily:"'DM Mono',monospace",fontSize:12,padding:"10px 12px",borderRadius:6,outline:"none",width:"100%",resize:"vertical",lineHeight:1.6}}/></div>
+                </div>
+              </div>
+              <div style={{background:"#c9a96e11",border:"1px solid #c9a96e33",borderRadius:6,padding:"10px 14px"}}>
+                <p style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"#c9a96e"}}>✓ Changes save automatically</p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Bottom Nav */}
@@ -962,6 +1039,45 @@ const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings
         );})()}
 
         {view==="calendar"&&(<div className="fade-in"><div style={{marginBottom:28}}><p style={{fontSize:11,fontFamily:"'DM Mono',monospace",letterSpacing:"0.18em",color:"#5a5048",textTransform:"uppercase"}}>Visual Planner</p><h1 style={{fontSize:38,fontWeight:300}}>Calendar</h1></div><BigCalendar weddings={weddings} team={team}/></div>)}
+
+        {view==="profile"&&(<div className="fade-in">
+          <div style={{marginBottom:32}}><p style={{fontSize:11,fontFamily:"'DM Mono',monospace",letterSpacing:"0.18em",color:"#5a5048",textTransform:"uppercase"}}>Settings</p><h1 style={{fontSize:38,fontWeight:300}}>Profile</h1></div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24,maxWidth:900}}>
+            {/* Studio Info */}
+            <div style={{background:"#0e0c0a",border:"1px solid #1e1a16",borderRadius:8,padding:28}}>
+              <p style={{fontSize:11,fontFamily:"'DM Mono',monospace",letterSpacing:"0.15em",color:"#5a5048",textTransform:"uppercase",marginBottom:20}}>Studio Info</p>
+              <div style={{display:"flex",flexDirection:"column",gap:14}}>
+                <div><label style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048",letterSpacing:"0.1em",textTransform:"uppercase",display:"block",marginBottom:6}}>Your Name</label>
+                  <input value={profile.adminName} onChange={e=>setProfile({...profile,adminName:e.target.value})} placeholder="Your full name"/></div>
+                <div><label style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048",letterSpacing:"0.1em",textTransform:"uppercase",display:"block",marginBottom:6}}>Studio Name</label>
+                  <input value={profile.studioName||""} onChange={e=>setProfile({...profile,studioName:e.target.value})} placeholder="Studio name"/></div>
+                <div><label style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048",letterSpacing:"0.1em",textTransform:"uppercase",display:"block",marginBottom:6}}>City</label>
+                  <input value={profile.city||""} onChange={e=>setProfile({...profile,city:e.target.value})} placeholder="City"/></div>
+                <div><label style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048",letterSpacing:"0.1em",textTransform:"uppercase",display:"block",marginBottom:6}}>WhatsApp Number (with country code)</label>
+                  <input value={profile.waNumber||""} onChange={e=>setProfile({...profile,waNumber:e.target.value.replace(/[^0-9]/g,"")})} placeholder="919876543210"/>
+                  <p style={{fontSize:10,color:"#3a3028",fontFamily:"'DM Mono',monospace",marginTop:4}}>e.g. 919876543210 (91 = India code)</p>
+                </div>
+              </div>
+            </div>
+            {/* Message Templates */}
+            <div style={{background:"#0e0c0a",border:"1px solid #1e1a16",borderRadius:8,padding:28}}>
+              <p style={{fontSize:11,fontFamily:"'DM Mono',monospace",letterSpacing:"0.15em",color:"#5a5048",textTransform:"uppercase",marginBottom:8}}>WhatsApp Message Templates</p>
+              <p style={{fontSize:11,color:"#3a3028",fontFamily:"'DM Mono',monospace",marginBottom:20}}>Variables: {"{name}"} {"{wedding}"} {"{event}"} {"{date}"} {"{role}"} {"{dayType}"} {"{amount}"} {"{adminName}"}</p>
+              <div style={{display:"flex",flexDirection:"column",gap:16}}>
+                <div><label style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#c9a96e",letterSpacing:"0.1em",textTransform:"uppercase",display:"block",marginBottom:6}}>📨 Booking Message (Admin → Crew)</label>
+                  <textarea value={profile.msgBooking||""} onChange={e=>setProfile({...profile,msgBooking:e.target.value})} rows={5} style={{background:"#111",border:"1px solid #2a2420",color:"#e8e0d4",fontFamily:"'DM Mono',monospace",fontSize:12,padding:"10px 12px",borderRadius:6,outline:"none",width:"100%",resize:"vertical",lineHeight:1.6}}/></div>
+                <div><label style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#4ade80",letterSpacing:"0.1em",textTransform:"uppercase",display:"block",marginBottom:6}}>✓ Confirm Message (Crew → Admin)</label>
+                  <textarea value={profile.msgConfirm||""} onChange={e=>setProfile({...profile,msgConfirm:e.target.value})} rows={4} style={{background:"#111",border:"1px solid #2a2420",color:"#e8e0d4",fontFamily:"'DM Mono',monospace",fontSize:12,padding:"10px 12px",borderRadius:6,outline:"none",width:"100%",resize:"vertical",lineHeight:1.6}}/></div>
+                <div><label style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#f87171",letterSpacing:"0.1em",textTransform:"uppercase",display:"block",marginBottom:6}}>✗ Decline Message (Crew → Admin)</label>
+                  <textarea value={profile.msgDecline||""} onChange={e=>setProfile({...profile,msgDecline:e.target.value})} rows={4} style={{background:"#111",border:"1px solid #2a2420",color:"#e8e0d4",fontFamily:"'DM Mono',monospace",fontSize:12,padding:"10px 12px",borderRadius:6,outline:"none",width:"100%",resize:"vertical",lineHeight:1.6}}/></div>
+              </div>
+            </div>
+          </div>
+          <div style={{marginTop:16,background:"#0e0c0a",border:"1px solid #c9a96e33",borderRadius:6,padding:"12px 20px",display:"flex",alignItems:"center",gap:10,maxWidth:900}}>
+            <span style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"#c9a96e"}}>✓</span>
+            <span style={{fontSize:12,fontFamily:"'DM Mono',monospace",color:"#5a5048"}}>Changes save automatically to Firebase in real-time</span>
+          </div>
+        </div>)}
       </div>
       {renderModals()}
     </div>
@@ -1058,13 +1174,16 @@ export default function Root() {
   const [weddingsData, setWeddingsData] = useState(()=>loadState("crew_weddings", []));
   const [portalReady, setPortalReady] = useState(!isTeamView || !USE_FIREBASE);
 
+  const [profileData, setProfileData] = useState(()=>loadState("crew_profile",{adminName:"Krunal Prajapati",waNumber:"919876543210"}));
+
   // For crew portal: load live data from Firebase
   useEffect(()=>{
     if(!isTeamView || !USE_FIREBASE) return;
     (async()=>{
-      const [fbTeam, fbWeddings] = await Promise.all([fbGet("crew_team"), fbGet("crew_weddings")]);
+      const [fbTeam, fbWeddings, fbProfile] = await Promise.all([fbGet("crew_team"), fbGet("crew_weddings"), fbGet("crew_profile")]);
       if(fbTeam) setTeamData(normalizeTeam(fbTeam));
       if(fbWeddings) setWeddingsData(Array.isArray(fbWeddings)?fbWeddings:Object.values(fbWeddings||{}));
+      if(fbProfile) setProfileData(fbProfile);
       setPortalReady(true);
     })();
   },[]);
@@ -1077,7 +1196,7 @@ export default function Root() {
         <p style={{fontSize:12,letterSpacing:"0.15em",textTransform:"uppercase"}}>Loading your schedule…</p>
       </div>
     );
-    return <TeamView team={teamData} weddings={weddingsData}/>;
+    return <TeamView team={teamData} weddings={weddingsData} adminProfile={profileData}/>;
   }
 
   if (!session?.loggedIn) return <AuthPage onLogin={user=>setSession(user)}/>;
