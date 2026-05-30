@@ -444,15 +444,193 @@ function MobileCalendar({ weddings, team }) {
   );
 }
 
+/* ─── Team Portal Calendar ───────────────────────────────────── */
+function TeamCalendar({ myHires, weddings, team, myName }) {
+  const today=new Date(); const [y,setY]=useState(today.getFullYear()); const [mo,setMo]=useState(today.getMonth());
+  const [selected,setSelected]=useState(null);
+
+  // Build all events for this month
+  const monthEvents=useMemo(()=>{
+    const list=[];
+    weddings.forEach(w=>(w.eventDays||[]).forEach(ed=>{
+      const [ey,em]=ed.date.split("-").map(Number);
+      if(ey===y&&em===mo+1){
+        const myHire=myHires.find(h=>h.wedding===w.name&&h.date===ed.date);
+        const allCrew=team.filter(m=>m.hires.some(h=>h.wedding===w.name&&h.date===ed.date));
+        list.push({date:ed.date,event:ed.event,weddingName:w.name,wedding:w,myHire,allCrew});
+      }
+    }));
+    return list.sort((a,b)=>a.date.localeCompare(b.date));
+  },[weddings,team,myHires,y,mo]);
+
+  // Build day→events map
+  const dayMap=useMemo(()=>{const m={};monthEvents.forEach(e=>{if(!m[e.date])m[e.date]=[];m[e.date].push(e);});return m;},[monthEvents]);
+
+  const firstDay=new Date(y,mo,1).getDay(); const dim=new Date(y,mo+1,0).getDate();
+  const cells=[]; for(let i=0;i<firstDay;i++) cells.push(null); for(let d=1;d<=dim;d++) cells.push(d);
+  const ds=d=>`${y}-${String(mo+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+  const todayStr=today.toISOString().slice(0,10);
+
+  return (
+    <div>
+      {/* Month nav */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+        <button onClick={()=>mo===0?(setMo(11),setY(y=>y-1)):setMo(m=>m-1)} style={{background:"none",border:"1px solid #2a2420",color:"#c9a96e",fontSize:18,padding:"6px 14px",borderRadius:4,cursor:"pointer"}}>‹</button>
+        <h2 style={{fontSize:20,fontWeight:300,fontFamily:"'Cormorant Garamond',serif"}}>{MONTH_NAMES[mo]} {y}</h2>
+        <button onClick={()=>mo===11?(setMo(0),setY(y=>y+1)):setMo(m=>m+1)} style={{background:"none",border:"1px solid #2a2420",color:"#c9a96e",fontSize:18,padding:"6px 14px",borderRadius:4,cursor:"pointer"}}>›</button>
+      </div>
+
+      {/* Legend */}
+      <div style={{display:"flex",gap:12,marginBottom:12,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:10,height:10,borderRadius:2,background:"#c9a96e"}}/><span style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048"}}>MY BOOKING</span></div>
+        <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:10,height:10,borderRadius:2,background:"#3a3028"}}/><span style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048"}}>OTHER EVENT</span></div>
+      </div>
+
+      {/* Grid calendar */}
+      <div style={{background:"#0a0a0a",border:"1px solid #1e1a16",borderRadius:8,overflow:"hidden",marginBottom:20}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:"1px solid #1e1a16"}}>
+          {DAY_NAMES.map((d,i)=><div key={i} style={{textAlign:"center",padding:"8px 4px",fontSize:10,fontFamily:"'DM Mono',monospace",color:"#3a3028",letterSpacing:"0.1em"}}>{d}</div>)}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
+          {cells.map((d,i)=>{
+            if(!d) return <div key={i} style={{minHeight:56,borderRight:"1px solid #111",borderBottom:"1px solid #111"}}/>;
+            const dateStr=ds(d); const entries=dayMap[dateStr]||[]; const isToday=dateStr===todayStr;
+            const hasMyHire=entries.some(e=>e.myHire); const isSelected=selected===dateStr;
+            return (
+              <div key={i} onClick={()=>entries.length>0?setSelected(isSelected?null:dateStr):null}
+                style={{minHeight:56,borderRight:"1px solid #111",borderBottom:"1px solid #111",padding:"4px 3px",cursor:entries.length?"pointer":"default",background:isSelected?"#c9a96e11":"transparent",transition:"background 0.15s"}}>
+                <div style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:isToday?"#c9a96e":hasMyHire?"#e8e0d4":entries.length?"#7a6f63":"#2a2420",fontWeight:isToday||hasMyHire?"600":"400",marginBottom:2}}>{d}</div>
+                {entries.slice(0,2).map((e,ei)=>(
+                  <div key={ei} style={{background:e.myHire?"#c9a96e33":evColor(e.event)+"18",borderLeft:`2px solid ${e.myHire?"#c9a96e":evColor(e.event)}`,borderRadius:2,padding:"1px 3px",marginBottom:1,overflow:"hidden"}}>
+                    <div style={{fontSize:8,fontFamily:"'DM Mono',monospace",color:e.myHire?"#c9a96e":evColor(e.event),textOverflow:"ellipsis",whiteSpace:"nowrap",overflow:"hidden"}}>{e.event}</div>
+                  </div>
+                ))}
+                {entries.length>2&&<div style={{fontSize:8,color:"#5a5048",fontFamily:"'DM Mono',monospace"}}>+{entries.length-2}</div>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Selected day detail */}
+      {selected&&dayMap[selected]&&(
+        <div style={{marginBottom:16}}>
+          <p style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:10}}>{selected}</p>
+          {dayMap[selected].map((e,i)=>(
+            <TeamEventCard key={i} e={e} myName={myName}/>
+          ))}
+        </div>
+      )}
+
+      {/* This month events list */}
+      {monthEvents.length===0
+        ?<div style={{border:"1px dashed #1e1a16",borderRadius:6,padding:32,textAlign:"center",color:"#3a3028",fontSize:14}}>No events this month</div>
+        :<div>
+          <p style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:10}}>All Events This Month</p>
+          {monthEvents.map((e,i)=><TeamEventCard key={i} e={e} myName={myName}/>)}
+        </div>
+      }
+    </div>
+  );
+}
+
+function TeamEventCard({ e, myName }) {
+  const [open,setOpen]=useState(false);
+  return (
+    <div style={{background:"#0e0c0a",border:`1px solid ${e.myHire?"#c9a96e44":"#1e1a16"}`,borderLeft:`3px solid ${e.myHire?"#c9a96e":evColor(e.event)}`,borderRadius:8,padding:"14px 16px",marginBottom:10,cursor:"pointer"}} onClick={()=>setOpen(o=>!o)}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+        <div style={{flex:1}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:4}}>
+            <span style={{fontSize:16,fontWeight:500}}>{e.weddingName}</span>
+            {e.myHire&&<span style={{background:"#c9a96e22",color:"#c9a96e",border:"1px solid #c9a96e44",fontSize:9,fontFamily:"'DM Mono',monospace",padding:"2px 8px",borderRadius:2,textTransform:"uppercase",letterSpacing:"0.08em"}}>My Booking</span>}
+          </div>
+          <div style={{fontSize:13,color:evColor(e.event),marginBottom:2}}>{e.event}</div>
+          <div style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"#5a5048"}}>📅 {e.date}</div>
+          {e.wedding?.location&&<div style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"#5a5048",marginTop:2}}>📍 {e.wedding.location}</div>}
+        </div>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
+          {e.myHire&&<span style={{background:(STATUS_COLOR[e.myHire.status]||"#fbbf24")+"22",color:STATUS_COLOR[e.myHire.status]||"#fbbf24",border:`1px solid ${STATUS_COLOR[e.myHire.status]||"#fbbf24"}44`,padding:"3px 10px",borderRadius:2,fontSize:10,fontFamily:"'DM Mono',monospace",textTransform:"uppercase"}}>{e.myHire.status||"Pending"}</span>}
+          <span style={{fontSize:11,color:"#5a5048",fontFamily:"'DM Mono',monospace"}}>{e.allCrew.length} crew {open?"▲":"▼"}</span>
+        </div>
+      </div>
+
+      {open&&(
+        <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #1e1a16"}}>
+          {/* Wedding info */}
+          {(e.wedding?.bride||e.wedding?.groom)&&(
+            <div style={{marginBottom:10}}>
+              <p style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:4}}>Client</p>
+              <p style={{fontSize:13,color:"#e8e0d4"}}>{[e.wedding?.bride,e.wedding?.groom].filter(Boolean).join(" & ")}</p>
+            </div>
+          )}
+          {/* My role */}
+          {e.myHire&&(
+            <div style={{background:"#c9a96e11",border:"1px solid #c9a96e33",borderRadius:6,padding:"10px 12px",marginBottom:10}}>
+              <p style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#c9a96e",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:4}}>My Assignment</p>
+              <p style={{fontSize:13,color:"#e8e0d4"}}>🎭 {e.myHire.hireRole} · ⏱ {e.myHire.dayType}</p>
+            </div>
+          )}
+          {/* Crew on this date — no rates */}
+          <p style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:6}}>Full Crew ({e.allCrew.length})</p>
+          {e.allCrew.length===0
+            ?<p style={{fontSize:12,color:"#3a3028"}}>No crew assigned yet</p>
+            :e.allCrew.map(member=>{
+              const memberHire=member.hires.find(h=>h.wedding===e.weddingName&&h.date===e.date);
+              const isMe=member.name===myName;
+              return (
+                <div key={member.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 10px",background:isMe?"#c9a96e11":"#0a0a0a",border:`1px solid ${isMe?"#c9a96e33":"#1e1a16"}`,borderRadius:5,marginBottom:5}}>
+                  <div>
+                    <span style={{fontSize:13,color:isMe?"#c9a96e":"#e8e0d4"}}>{member.name}{isMe?" (you)":""}</span>
+                    <span style={{fontSize:11,color:"#5a5048",fontFamily:"'DM Mono',monospace",marginLeft:8}}>{memberHire?.hireRole||member.role}</span>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    {member.phone&&<a href={`tel:${member.phone}`} style={{background:"#1e1a16",border:"1px solid #2a2420",color:"#7a6f63",fontSize:10,padding:"3px 8px",borderRadius:3,fontFamily:"'DM Mono',monospace",textDecoration:"none"}}>📞 {member.phone}</a>}
+                    {memberHire&&<span style={{background:(STATUS_COLOR[memberHire.status]||"#fbbf24")+"22",color:STATUS_COLOR[memberHire.status]||"#fbbf24",fontSize:9,padding:"2px 7px",borderRadius:2,fontFamily:"'DM Mono',monospace",textTransform:"uppercase"}}>{memberHire.status||"Pending"}</span>}
+                  </div>
+                </div>
+              );
+            })
+          }
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Team View (Crew Portal) ────────────────────────────────── */
 function TeamView({ team, weddings, adminProfile }) {
   const isMobile=useIsMobile();
-  const [myName,setMyName]=useState(loadState("crew_myname",""));
-  const [nameInput,setNameInput]=useState("");
-  const me=team.find(m=>m.name===myName);
-  // If saved name no longer exists in team, reset to name picker
-  if(myName && !me){ saveState("crew_myname",""); }
-  function confirmIdentity(){const found=team.find(m=>m.name.toLowerCase()===nameInput.trim().toLowerCase());if(found){setMyName(found.name);saveState("crew_myname",found.name);}else alert("Name not found.");}
+  // Session: {memberId, name} stored in sessionStorage (cleared on tab close)
+  const [session,setSession]=useState(()=>{try{const s=sessionStorage.getItem("crew_portal_session");return s?JSON.parse(s):null;}catch{return null;}});
+  const [step,setStep]=useState("pick"); // "pick" | "pass"
+  const [pickedName,setPickedName]=useState("");
+  const [passInput,setPassInput]=useState("");
+  const [passError,setPassError]=useState("");
+  const [passLoading,setPassLoading]=useState(false);
+  const [showPass,setShowPass]=useState(false);
+  const [portalTab,setPortalTab]=useState("schedule"); // "schedule" | "calendar"
+
+  const me=team.find(m=>m.id===session?.memberId);
+  // If session member no longer in team, clear
+  if(session&&!me){sessionStorage.removeItem("crew_portal_session");setSession(null);}
+
+  function pickMember(name){setPickedName(name);setStep("pass");setPassInput("");setPassError("");}
+  function attemptLogin(){
+    setPassLoading(true);setPassError("");
+    setTimeout(()=>{
+      const found=team.find(m=>m.name===pickedName);
+      if(!found){setPassError("Member not found.");setPassLoading(false);return;}
+      const correctPass=found.portalPass||"";
+      if(!correctPass){setPassError("No password set yet. Ask admin to set your password.");setPassLoading(false);return;}
+      if(passInput!==correctPass){setPassError("Wrong password. Try again.");setPassLoading(false);return;}
+      const s={memberId:found.id,name:found.name};
+      sessionStorage.setItem("crew_portal_session",JSON.stringify(s));
+      setSession(s);
+      setPassLoading(false);
+    },600);
+  }
+  function logout(){sessionStorage.removeItem("crew_portal_session");setSession(null);setStep("pick");setPickedName("");setPassInput("");}
+
   function sendWA(hire,action,memberName){
     const isConfirm=action==="CONFIRM";
     const template=isConfirm?(adminProfile?.msgConfirm||""):(adminProfile?.msgDecline||"");
@@ -463,62 +641,154 @@ function TeamView({ team, weddings, adminProfile }) {
     window.open(`https://wa.me/${waNum}?text=${encodeURIComponent(msg)}`,"_blank");
   }
 
-  const S=`@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=DM+Mono:wght@300;400&display=swap');*{box-sizing:border-box;margin:0;padding:0;}input{background:#111;border:1px solid #2a2420;color:#e8e0d4;font-family:'DM Mono',monospace;font-size:16px;padding:14px 16px;border-radius:6px;outline:none;width:100%;}`;
+  const S=`@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=DM+Mono:wght@300;400&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0;}
+  input{background:#111;border:1px solid #2a2420;color:#e8e0d4;font-family:'DM Mono',monospace;font-size:16px;padding:14px 16px;border-radius:6px;outline:none;width:100%;transition:border-color 0.2s;}
+  input:focus{border-color:#c9a96e;}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+  @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}`;
 
-  if(!myName) return (
-    <div style={{minHeight:"100vh",background:"#0a0a0a",display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"'Cormorant Garamond',Georgia,serif",color:"#e8e0d4"}}>
+  /* ── STEP 1: Pick name ── */
+  if(!session&&step==="pick") return (
+    <div style={{minHeight:"100vh",background:"#060504",display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"'Cormorant Garamond',Georgia,serif",color:"#e8e0d4"}}>
       <style>{S}</style>
-      <div style={{background:"#0e0c0a",border:"1px solid #2a2420",borderRadius:10,padding:isMobile?28:40,width:"100%",maxWidth:400,textAlign:"center"}}>
-        <p style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"#5a5048",textTransform:"uppercase",marginBottom:8}}>Crew Portal</p>
-        <h2 style={{fontSize:isMobile?24:28,fontWeight:300,marginBottom:8}}>Who are you?</h2>
-        <p style={{fontSize:13,color:"#5a5048",marginBottom:20}}>Tap your name to see your schedule</p>
-        <div style={{display:"flex",flexWrap:"wrap",gap:8,justifyContent:"center",marginBottom:16}}>
-          {team.map(m=><button key={m.id} onClick={()=>setNameInput(m.name)} style={{background:nameInput===m.name?"#c9a96e22":"#1a1612",border:`1px solid ${nameInput===m.name?"#c9a96e":"#2a2420"}`,color:nameInput===m.name?"#c9a96e":"#7a6f63",fontSize:13,padding:"8px 14px",borderRadius:6,fontFamily:"'Cormorant Garamond',Georgia,serif",cursor:"pointer"}}>{m.name.split(" ")[0]}</button>)}
+      <div style={{width:"100%",maxWidth:420,animation:"fadeUp 0.5s ease both"}}>
+        <div style={{textAlign:"center",marginBottom:32}}>
+          <div style={{display:"flex",alignItems:"baseline",gap:8,justifyContent:"center",marginBottom:8}}>
+            <span style={{fontSize:22,fontWeight:300,letterSpacing:"0.1em"}}>CREW</span>
+            <span style={{fontSize:12,fontFamily:"'DM Mono',monospace",color:"#c9a96e",letterSpacing:"0.15em"}}>PORTAL</span>
+          </div>
+          <div style={{width:32,height:1,background:"#c9a96e44",margin:"0 auto 20px"}}/>
+          <h2 style={{fontSize:28,fontWeight:300,marginBottom:8}}>Who are you?</h2>
+          <p style={{fontSize:13,color:"#5a5048"}}>Select your name to sign in</p>
         </div>
-        <input placeholder="Or type your full name..." value={nameInput} onChange={e=>setNameInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&confirmIdentity()} style={{marginBottom:12}}/>
-        <button onClick={confirmIdentity} style={{width:"100%",background:"linear-gradient(135deg,#c9a96e,#a8814a)",color:"#0a0a0a",border:"none",padding:"14px",fontSize:16,fontWeight:600,borderRadius:6,cursor:"pointer",fontFamily:"'Cormorant Garamond',Georgia,serif"}}>View My Schedule</button>
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:8}}>
+          {team.map(m=>(
+            <button key={m.id} onClick={()=>pickMember(m.name)}
+              style={{background:"#0e0c0a",border:"1px solid #2a2420",color:"#e8e0d4",padding:"14px 18px",borderRadius:8,fontSize:16,fontFamily:"'Cormorant Garamond',Georgia,serif",cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center",transition:"all 0.2s"}}>
+              <div>
+                <div style={{fontSize:17,fontWeight:400}}>{m.name}</div>
+                <div style={{fontSize:11,color:"#5a5048",fontFamily:"'DM Mono',monospace",marginTop:2}}>{m.role}</div>
+              </div>
+              <span style={{color:"#3a3028",fontSize:20}}>›</span>
+            </button>
+          ))}
+        </div>
+        {team.length===0&&<p style={{textAlign:"center",color:"#3a3028",fontSize:13,fontFamily:"'DM Mono',monospace"}}>No team members yet.</p>}
       </div>
     </div>
   );
 
+  /* ── STEP 2: Enter password ── */
+  if(!session&&step==="pass") return (
+    <div style={{minHeight:"100vh",background:"#060504",display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"'Cormorant Garamond',Georgia,serif",color:"#e8e0d4"}}>
+      <style>{S}</style>
+      <div style={{width:"100%",maxWidth:400,animation:"fadeUp 0.4s ease both"}}>
+        <button onClick={()=>setStep("pick")} style={{background:"none",border:"none",color:"#5a5048",fontSize:13,fontFamily:"'DM Mono',monospace",cursor:"pointer",marginBottom:24,padding:0}}>← Back</button>
+        <div style={{marginBottom:28}}>
+          <p style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"#5a5048",textTransform:"uppercase",letterSpacing:"0.15em",marginBottom:8}}>Crew Portal</p>
+          <h2 style={{fontSize:32,fontWeight:300}}>{pickedName.split(" ")[0]}</h2>
+          <p style={{fontSize:13,color:"#5a5048",marginTop:4}}>Enter your password to continue</p>
+        </div>
+        <div style={{position:"relative",marginBottom:passError?12:20}}>
+          <input type={showPass?"text":"password"} placeholder="Your portal password" value={passInput}
+            onChange={e=>setPassInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&attemptLogin()}
+            style={{paddingRight:48}}/>
+          <button onClick={()=>setShowPass(s=>!s)} style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#5a5048",fontSize:18,cursor:"pointer",lineHeight:1,padding:0}}>{showPass?"🙈":"👁"}</button>
+        </div>
+        {passError&&<div style={{background:"#f8717115",border:"1px solid #f8717133",borderRadius:6,padding:"10px 14px",fontSize:13,color:"#f87171",fontFamily:"'DM Mono',monospace",marginBottom:16}}>⚠ {passError}</div>}
+        <button onClick={attemptLogin} disabled={passLoading}
+          style={{width:"100%",padding:"16px",background:passLoading?"#5a4a2a":"linear-gradient(135deg,#c9a96e,#a8814a)",color:"#0a0a0a",border:"none",borderRadius:8,fontSize:17,fontWeight:600,cursor:passLoading?"not-allowed":"pointer",fontFamily:"'Cormorant Garamond',Georgia,serif",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
+          {passLoading?<><div style={{width:18,height:18,border:"2px solid #0a0a0a44",borderTopColor:"#0a0a0a",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/> Signing in…</>:"View My Schedule →"}
+        </button>
+      </div>
+    </div>
+  );
+
+  /* ── LOGGED IN ── */
   const upcomingHires=[...(me?.hires||[])].sort((a,b)=>a.date.localeCompare(b.date));
+  const pendingCount=upcomingHires.filter(h=>h.status==="Pending").length;
+
+  const TABS=[{id:"schedule",label:"My Schedule"},{id:"calendar",label:"Full Calendar"}];
+
   return (
     <div style={{minHeight:"100vh",background:"#0a0a0a",fontFamily:"'Cormorant Garamond',Georgia,serif",color:"#e8e0d4",paddingBottom:isMobile?32:0}}>
       <style>{S}</style>
-      <div style={{background:"#0e0c0a",borderBottom:"1px solid #1e1a16",padding:isMobile?"14px 20px":"0 24px",display:"flex",alignItems:"center",justifyContent:"space-between",height:isMobile?"auto":56}}>
-        <div style={{display:"flex",alignItems:"baseline",gap:8}}><span style={{fontSize:18,fontWeight:300}}>CREW</span><span style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"#c9a96e"}}>PORTAL</span></div>
-        <button onClick={()=>{setMyName("");saveState("crew_myname","");}} style={{background:"none",border:"1px solid #2a2420",color:"#5a5048",fontSize:11,padding:"6px 12px",borderRadius:4,fontFamily:"'DM Mono',monospace",cursor:"pointer"}}>Switch</button>
+      {/* Header */}
+      <div style={{background:"#0e0c0a",borderBottom:"1px solid #1e1a16",padding:isMobile?"14px 20px":"0 28px",display:"flex",alignItems:"center",justifyContent:"space-between",height:isMobile?"auto":56,position:"sticky",top:0,zIndex:100}}>
+        <div style={{display:"flex",alignItems:"baseline",gap:8}}>
+          <span style={{fontSize:18,fontWeight:300}}>CREW</span>
+          <span style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"#c9a96e"}}>PORTAL</span>
+        </div>
+        <div style={{display:"flex",gap:10,alignItems:"center"}}>
+          <span style={{fontSize:13,color:"#7a6f63",fontFamily:"'DM Mono',monospace"}}>{me?.name?.split(" ")[0]}</span>
+          <button onClick={logout} style={{background:"none",border:"1px solid #2a2420",color:"#5a5048",fontSize:11,padding:"6px 12px",borderRadius:4,fontFamily:"'DM Mono',monospace",cursor:"pointer"}}>Sign Out</button>
+        </div>
       </div>
-      <div style={{padding:isMobile?"20px":"24px",maxWidth:700,margin:"0 auto"}}>
-        <h1 style={{fontSize:isMobile?28:36,fontWeight:300,marginBottom:2}}>{myName}</h1>
-        <p style={{fontSize:13,color:"#5a5048",fontFamily:"'DM Mono',monospace",marginBottom:20}}>{me?.role} · ₹{me?.rate?.toLocaleString("en-IN")}/day</p>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:24}}>
-          {[{v:(me?.hires||[]).length,l:"Hires"},{v:(me?.hires||[]).filter(h=>h.status==="Confirmed").length,l:"Confirmed"},{v:`₹${(me?.hires||[]).reduce((s,h)=>s+(me?.rate||0)*(h.dayType==="Half Day"?0.5:1),0).toLocaleString("en-IN")}`,l:"Payout"}].map((s,i)=>(
-            <div key={i} style={{background:"#0e0c0a",border:"1px solid #1e1a16",borderRadius:6,padding:"14px 12px"}}>
-              <div style={{fontSize:isMobile?20:26,fontWeight:300,color:"#c9a96e"}}>{s.v}</div>
+
+      <div style={{padding:isMobile?"16px":"24px 32px",maxWidth:760,margin:"0 auto"}}>
+        {/* Name + role */}
+        <div style={{marginBottom:20}}>
+          <h1 style={{fontSize:isMobile?26:34,fontWeight:300,marginBottom:2}}>{me?.name}</h1>
+          <p style={{fontSize:12,color:"#5a5048",fontFamily:"'DM Mono',monospace"}}>{me?.role}</p>
+        </div>
+
+        {/* Stats */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:20}}>
+          {[{v:upcomingHires.length,l:"Hires"},{v:upcomingHires.filter(h=>h.status==="Confirmed").length,l:"Confirmed"},{v:pendingCount,l:"Pending",alert:pendingCount>0}].map((s,i)=>(
+            <div key={i} style={{background:"#0e0c0a",border:`1px solid ${s.alert?"#fbbf2444":"#1e1a16"}`,borderRadius:6,padding:"14px 12px"}}>
+              <div style={{fontSize:isMobile?20:26,fontWeight:300,color:s.alert?"#fbbf24":"#c9a96e"}}>{s.v}</div>
               <div style={{fontSize:10,letterSpacing:"0.12em",textTransform:"uppercase",color:"#5a5048",marginTop:2,fontFamily:"'DM Mono',monospace"}}>{s.l}</div>
             </div>
           ))}
         </div>
-        {upcomingHires.length===0?<div style={{border:"1px dashed #1e1a16",borderRadius:6,padding:40,textAlign:"center",color:"#3a3028"}}>No assignments yet.</div>
-        :upcomingHires.map((h,i)=>(
-          <div key={i} style={{background:"#0e0c0a",border:"1px solid #1e1a16",borderLeft:`3px solid ${evColor(h.event)}`,borderRadius:8,padding:"16px",marginBottom:12}}>
-            <div style={{fontSize:17,fontWeight:500}}>{h.wedding}</div>
-            <div style={{fontSize:14,color:evColor(h.event),margin:"2px 0 6px"}}>{h.event}</div>
-            <div style={{fontSize:12,color:"#5a5048",fontFamily:"'DM Mono',monospace"}}>📅 {h.date}</div>
-            <div style={{fontSize:12,color:"#5a5048",fontFamily:"'DM Mono',monospace"}}>🎭 {h.hireRole} · ⏱ {h.dayType}</div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:10,flexWrap:"wrap",gap:8}}>
-              <div>
-                <span style={{background:(STATUS_COLOR[h.status]||"#fbbf24")+"22",color:STATUS_COLOR[h.status]||"#fbbf24",border:`1px solid ${STATUS_COLOR[h.status]||"#fbbf24"}44`,padding:"3px 10px",borderRadius:2,fontSize:10,fontFamily:"'DM Mono',monospace",textTransform:"uppercase"}}>{h.status||"Pending"}</span>
-                <span style={{fontSize:13,color:"#c9a96e",marginLeft:10}}>₹{((me?.rate||0)*(h.dayType==="Half Day"?0.5:1)).toLocaleString("en-IN")}</span>
-              </div>
-              <div style={{display:"flex",gap:6}}>
-                <button onClick={()=>sendWA(h,"CONFIRM",myName)} style={{background:"#4ade8022",border:"1px solid #4ade8044",color:"#4ade80",fontSize:11,padding:"6px 12px",borderRadius:4,fontFamily:"'DM Mono',monospace",cursor:"pointer"}}>✓ Confirm</button>
-                <button onClick={()=>sendWA(h,"DECLINE",myName)} style={{background:"#f8717122",border:"1px solid #f8717144",color:"#f87171",fontSize:11,padding:"6px 12px",borderRadius:4,fontFamily:"'DM Mono',monospace",cursor:"pointer"}}>✗ Decline</button>
-              </div>
-            </div>
+
+        {/* Tab switcher */}
+        <div style={{display:"flex",gap:0,marginBottom:20,background:"#0e0c0a",border:"1px solid #1e1a16",borderRadius:6,overflow:"hidden"}}>
+          {TABS.map(t=>(
+            <button key={t.id} onClick={()=>setPortalTab(t.id)}
+              style={{flex:1,padding:"11px",background:portalTab===t.id?"#c9a96e22":"transparent",color:portalTab===t.id?"#c9a96e":"#5a5048",border:"none",borderRight:"1px solid #1e1a16",fontSize:13,fontFamily:"'DM Mono',monospace",cursor:"pointer",letterSpacing:"0.05em",transition:"all 0.2s"}}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* My Schedule tab */}
+        {portalTab==="schedule"&&(
+          <div>
+            {upcomingHires.length===0
+              ?<div style={{border:"1px dashed #1e1a16",borderRadius:6,padding:40,textAlign:"center",color:"#3a3028"}}>No assignments yet.</div>
+              :upcomingHires.map((h,i)=>{
+                const wedding=weddings.find(w=>w.name===h.wedding);
+                return (
+                  <div key={i} style={{background:"#0e0c0a",border:`1px solid ${h.status==="Pending"?"#fbbf2433":"#1e1a16"}`,borderLeft:`3px solid ${evColor(h.event)}`,borderRadius:8,padding:"16px",marginBottom:12}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8,marginBottom:10}}>
+                      <div>
+                        <div style={{fontSize:17,fontWeight:500}}>{h.wedding}</div>
+                        <div style={{fontSize:14,color:evColor(h.event),margin:"2px 0"}}>{h.event}</div>
+                        {(wedding?.bride||wedding?.groom)&&<div style={{fontSize:12,color:"#7a6f63"}}>💍 {[wedding?.bride,wedding?.groom].filter(Boolean).join(" & ")}</div>}
+                        <div style={{fontSize:12,color:"#5a5048",fontFamily:"'DM Mono',monospace",marginTop:2}}>📅 {h.date}</div>
+                        {wedding?.location&&<div style={{fontSize:12,color:"#5a5048",fontFamily:"'DM Mono',monospace"}}>📍 {wedding.location}</div>}
+                        <div style={{fontSize:12,color:"#5a5048",fontFamily:"'DM Mono',monospace"}}>🎭 {h.hireRole} · ⏱ {h.dayType}</div>
+                      </div>
+                      <span style={{background:(STATUS_COLOR[h.status]||"#fbbf24")+"22",color:STATUS_COLOR[h.status]||"#fbbf24",border:`1px solid ${STATUS_COLOR[h.status]||"#fbbf24"}44`,padding:"4px 12px",borderRadius:2,fontSize:10,fontFamily:"'DM Mono',monospace",textTransform:"uppercase",flexShrink:0}}>{h.status||"Pending"}</span>
+                    </div>
+                    {/* WA confirm/decline — no price shown */}
+                    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                      <button onClick={()=>sendWA(h,"CONFIRM",me.name)} style={{background:"#4ade8022",border:"1px solid #4ade8044",color:"#4ade80",fontSize:12,padding:"8px 16px",borderRadius:5,fontFamily:"'DM Mono',monospace",cursor:"pointer",flex:1}}>✓ Confirm via WhatsApp</button>
+                      <button onClick={()=>sendWA(h,"DECLINE",me.name)} style={{background:"#f8717122",border:"1px solid #f8717144",color:"#f87171",fontSize:12,padding:"8px 16px",borderRadius:5,fontFamily:"'DM Mono',monospace",cursor:"pointer",flex:1}}>✗ Decline</button>
+                    </div>
+                  </div>
+                );
+              })
+            }
           </div>
-        ))}
+        )}
+
+        {/* Full Calendar tab */}
+        {portalTab==="calendar"&&(
+          <TeamCalendar myHires={me?.hires||[]} weddings={weddings} team={team} myName={me?.name}/>
+        )}
       </div>
     </div>
   );
@@ -580,8 +850,8 @@ function AdminApp({ user, onLogout }) {
   const [editMember,setEditMember]=useState(null);
   const [editWedding,setEditWedding]=useState(null);
   const [editHire,setEditHire]=useState(null);
-  const [newMember,setNewMember]=useState({name:"",role:ROLES[0],phone:"",rate:""});
-  const [editForm,setEditForm]=useState({name:"",role:ROLES[0],phone:"",rate:""});
+  const [newMember,setNewMember]=useState({name:"",role:ROLES[0],phone:"",rate:"",portalPass:""});
+  const [editForm,setEditForm]=useState({name:"",role:ROLES[0],phone:"",rate:"",portalPass:""});
   const [wForm,setWForm]=useState({name:"",bride:"",groom:"",location:"",selectedDates:[],eventDays:[]});
   const [hireForm,setHireForm]=useState({wedding:"",selectedEventDays:[],status:"Confirmed",dayType:"Full Day",hireRole:ROLES[0]});
   const [editHireForm,setEditHireForm]=useState({status:"Confirmed",dayType:"Full Day",hireRole:ROLES[0]});
@@ -619,8 +889,8 @@ const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings
   function toggleWDate(ds){setWForm(prev=>{const already=prev.selectedDates.includes(ds);return{...prev,selectedDates:already?prev.selectedDates.filter(d=>d!==ds):[...prev.selectedDates,ds].sort(),eventDays:already?prev.eventDays.filter(ed=>ed.date!==ds):prev.eventDays};});}
   function saveWedding(){if(!wForm.name)return;if(editWedding){setWeddings(weddings.map(w=>w.id===editWedding.id?{...w,...wForm}:w));}else{setWeddings([...weddings,{id:Date.now(),...wForm}]);}setShowAddWedding(false);}
   function removeWedding(id){setWeddings(weddings.filter(w=>w.id!==id));}
-  function addMember(){if(!newMember.name)return;setTeam([...team,{id:Date.now(),...newMember,rate:Number(newMember.rate),hires:[]}]);setNewMember({name:"",role:ROLES[0],phone:"",rate:""});setShowAddMember(false);}
-  function saveEditMember(){setTeam(team.map(m=>m.id===editMember.id?{...m,...editForm,rate:Number(editForm.rate)}:m));setEditMember(null);}
+  function addMember(){if(!newMember.name)return;setTeam([...team,{id:Date.now(),...newMember,rate:Number(newMember.rate),hires:[]}]);setNewMember({name:"",role:ROLES[0],phone:"",rate:"",portalPass:""});setShowAddMember(false);}
+  function saveEditMember(){const pp=editForm.portalPass||editMember?.portalPass||"";setTeam(team.map(m=>m.id===editMember.id?{...m,...editForm,rate:Number(editForm.rate),portalPass:pp}:m));setEditMember(null);}
   function removeMember(id){setTeam(team.filter(m=>m.id!==id));}
   function toggleEventDay(key){setHireForm(prev=>({...prev,selectedEventDays:prev.selectedEventDays.includes(key)?prev.selectedEventDays.filter(k=>k!==key):[...prev.selectedEventDays,key]}));}
   function addBulkHire(memberId){if(!hireForm.wedding||hireForm.selectedEventDays.length===0)return;const newHires=hireForm.selectedEventDays.map(key=>{const[date,...evParts]=key.split("|");const event=evParts.join("|");return{wedding:hireForm.wedding,event,date,status:hireForm.status,dayType:hireForm.dayType,hireRole:hireForm.hireRole};});setTeam(team.map(m=>m.id===memberId?{...m,hires:[...m.hires,...newHires]}:m));setHireForm({wedding:"",selectedEventDays:[],status:"Confirmed",dayType:"Full Day",hireRole:ROLES[0]});setShowAddHire(null);}
@@ -757,7 +1027,7 @@ const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings
               </div>
               <div style={{display:"flex",gap:8,marginBottom:20}}>
                 <button className="btn-gold" style={{flex:1,fontSize:14}} onClick={()=>{setHireForm({wedding:"",selectedEventDays:[],status:"Confirmed",dayType:"Full Day",hireRole:m.role});setShowAddHire(m.id);}}>+ Add Hire</button>
-                <button onClick={()=>{setEditForm({name:m.name,role:m.role,phone:m.phone||"",rate:m.rate});setEditMember(m);}} style={{background:"#1a1612",border:"1px solid #2a2420",color:"#7a6f63",padding:"12px 16px",borderRadius:6,fontSize:14}}>Edit</button>
+                <button onClick={()=>{setEditForm({name:m.name,role:m.role,phone:m.phone||"",rate:m.rate,portalPass:m.portalPass||""});setEditMember(m);}} style={{background:"#1a1612",border:"1px solid #2a2420",color:"#7a6f63",padding:"12px 16px",borderRadius:6,fontSize:14}}>Edit</button>
                 {m.phone&&<button onClick={()=>window.open(`https://wa.me/91${m.phone}`,"_blank")} style={{background:"#25D36622",border:"1px solid #25D36644",color:"#25D366",padding:"12px 14px",borderRadius:6,fontSize:16}}>💬</button>}
               </div>
               {[...m.hires].sort((a,b)=>a.date.localeCompare(b.date)).map((h,i)=>(
@@ -956,7 +1226,7 @@ const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                   <div><div style={{fontSize:19,fontWeight:500,marginBottom:4}}>{m.name}</div><span className="tag" style={{background:"#c9a96e22",color:"#c9a96e"}}>{m.role}</span></div>
                   <div style={{display:"flex",gap:6}}>
-                    <button onClick={e=>{e.stopPropagation();setEditForm({name:m.name,role:m.role,phone:m.phone||"",rate:m.rate});setEditMember(m);}} style={{background:"none",border:"1px solid #2a2420",color:"#7a6f63",fontSize:11,padding:"4px 10px",borderRadius:3,fontFamily:"'DM Mono',monospace"}}>EDIT</button>
+                    <button onClick={e=>{e.stopPropagation();setEditForm({name:m.name,role:m.role,phone:m.phone||"",rate:m.rate,portalPass:m.portalPass||""});setEditMember(m);}} style={{background:"none",border:"1px solid #2a2420",color:"#7a6f63",fontSize:11,padding:"4px 10px",borderRadius:3,fontFamily:"'DM Mono',monospace"}}>EDIT</button>
                     <button onClick={e=>{e.stopPropagation();removeMember(m.id);}} style={{background:"none",border:"none",color:"#3a3028",fontSize:18,padding:4}}>×</button>
                   </div>
                 </div>
@@ -965,6 +1235,7 @@ const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings
                   <div><div style={{fontSize:22,color:"#c9a96e",fontWeight:300}}>₹{m.hires.reduce((s,h)=>s+m.rate*(h.dayType==="Half Day"?0.5:1),0).toLocaleString("en-IN")}</div><div style={{fontSize:10,color:"#5a5048",fontFamily:"'DM Mono',monospace"}}>PAYOUT</div></div>
                 </div>
                 {m.phone&&<div style={{marginTop:8,fontSize:12,color:"#5a5048",fontFamily:"'DM Mono',monospace"}}>📞 {m.phone} · ₹{m.rate?.toLocaleString("en-IN")}/day</div>}
+                <div style={{marginTop:6,display:"flex",alignItems:"center",gap:6}}>{m.portalPass?<span style={{fontSize:9,fontFamily:"'DM Mono',monospace",color:"#4ade8088",background:"#4ade8011",border:"1px solid #4ade8022",padding:"2px 8px",borderRadius:2}}>🔐 Password Set</span>:<span style={{fontSize:9,fontFamily:"'DM Mono',monospace",color:"#f8717188",background:"#f8717111",border:"1px solid #f8717122",padding:"2px 8px",borderRadius:2}}>⚠ No Password</span>}</div>
               </div>
             ))}
             <div style={{border:"1px dashed #2a2420",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",minHeight:150}} onClick={()=>setShowAddMember(true)}><span style={{color:"#3a3028",fontSize:32}}>+</span></div>
@@ -975,7 +1246,7 @@ const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings
           const m=team.find(t=>t.id===selectedMember.id)||selectedMember;
           return (<div className="fade-in">
             <button className="btn-ghost" style={{marginBottom:24}} onClick={()=>setView("team")}>← Back</button>
-            <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:4}}><h1 style={{fontSize:40,fontWeight:300}}>{m.name}</h1><button className="btn-ghost" onClick={()=>{setEditForm({name:m.name,role:m.role,phone:m.phone||"",rate:m.rate});setEditMember(m);}}>Edit</button></div>
+            <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:4}}><h1 style={{fontSize:40,fontWeight:300}}>{m.name}</h1><button className="btn-ghost" onClick={()=>{setEditForm({name:m.name,role:m.role,phone:m.phone||"",rate:m.rate,portalPass:m.portalPass||""});setEditMember(m);}}>Edit</button></div>
             <p style={{color:"#5a5048",fontFamily:"'DM Mono',monospace",fontSize:13,marginBottom:24}}>{m.role} · {m.phone} · ₹{m.rate?.toLocaleString("en-IN")}/day</p>
             <div style={{display:"flex",gap:20,marginBottom:28}}>
               {[{v:m.hires.length,l:"Assignments"},{v:m.hires.filter(h=>h.status==="Confirmed").length,l:"Confirmed"},{v:`₹${m.hires.reduce((s,h)=>s+m.rate*(h.dayType==="Half Day"?0.5:1),0).toLocaleString("en-IN")}`,l:"Total Payout"}].map((s,i)=>(
@@ -1106,6 +1377,11 @@ const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings
           <RoleSelect value={newMember.role} onChange={v=>setNewMember({...newMember,role:v})}/>
           <input placeholder="Phone Number" value={newMember.phone} onChange={e=>setNewMember({...newMember,phone:e.target.value})}/>
           <input placeholder="Daily Rate (₹)" type="number" value={newMember.rate} onChange={e=>setNewMember({...newMember,rate:e.target.value})}/>
+          <div style={{paddingTop:8,borderTop:"1px solid #1e1a16"}}>
+            <label style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#c9a96e",letterSpacing:"0.12em",textTransform:"uppercase",display:"block",marginBottom:6}}>🔐 Portal Password</label>
+            <input placeholder="Set crew portal password" value={newMember.portalPass||""} onChange={e=>setNewMember({...newMember,portalPass:e.target.value})}/>
+            <p style={{fontSize:10,color:"#3a3028",fontFamily:"'DM Mono',monospace",marginTop:5}}>They use this to log in to crew portal. Keep it private.</p>
+          </div>
         </div>
         <div style={{display:"flex",gap:10,marginTop:20}}><button className="btn-gold" style={{flex:1}} onClick={addMember}>Add Member</button><button className="btn-ghost" onClick={()=>setShowAddMember(false)}>Cancel</button></div>
       </div></div>)}
@@ -1117,6 +1393,11 @@ const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings
           <RoleSelect value={editForm.role} onChange={v=>setEditForm({...editForm,role:v})}/>
           <input placeholder="Phone" value={editForm.phone} onChange={e=>setEditForm({...editForm,phone:e.target.value})}/>
           <input placeholder="Daily Rate (₹)" type="number" value={editForm.rate} onChange={e=>setEditForm({...editForm,rate:e.target.value})}/>
+          <div style={{paddingTop:8,borderTop:"1px solid #1e1a16"}}>
+            <label style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#c9a96e",letterSpacing:"0.12em",textTransform:"uppercase",display:"block",marginBottom:6}}>🔐 Portal Password</label>
+            <input placeholder="Set or update portal password" value={editForm.portalPass||""} onChange={e=>setEditForm({...editForm,portalPass:e.target.value})}/>
+            {editMember?.portalPass?<p style={{fontSize:10,color:"#4ade8088",fontFamily:"'DM Mono',monospace",marginTop:5}}>✓ Password is set. Change here or leave to keep.</p>:<p style={{fontSize:10,color:"#f8717188",fontFamily:"'DM Mono',monospace",marginTop:5}}>⚠ No password set. Add one so they can log in.</p>}
+          </div>
         </div>
         <div style={{display:"flex",gap:10,marginTop:20}}><button className="btn-gold" style={{flex:1}} onClick={saveEditMember}>Save Changes</button><button className="btn-ghost" onClick={()=>setEditMember(null)}>Cancel</button></div>
       </div></div>)}
