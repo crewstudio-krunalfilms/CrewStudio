@@ -9,10 +9,21 @@ const ROLES = [
   "Wedding Coordinator","Second Shooter"
 ];
 const DEFAULT_EVENTS = ["Mehndi","Sangeet","Haldi","Wedding Ceremony","Reception","Pre-Wedding Shoot","Engagement"];
+
+// ── EVENT TYPES (for Add Wedding/Event modal) ──────────────────
+const EVENT_TYPES = [
+  { id:"wedding",       label:"💍 Wedding",        color:"#c9a96e", subEvents:["Mehndi","Sangeet","Haldi","Wedding Ceremony","Reception","Pre-Wedding Shoot","Tilak","Ring Ceremony","Garba Night","Cocktail Party"] },
+  { id:"engagement",   label:"💎 Engagement",      color:"#fb923c", subEvents:["Engagement Ceremony","Ring Exchange","Dinner","Pre-Engagement Shoot"] },
+  { id:"babyshower",   label:"🍼 Baby Shower",     color:"#a78bfa", subEvents:["Baby Shower","Maternity Shoot","Baby Reveal","Welcome Ceremony"] },
+  { id:"birthday",     label:"🎂 Birthday",         color:"#34d399", subEvents:["Birthday Party","Cake Cutting","Photo Session","Surprise Party"] },
+  { id:"corporate",    label:"🏢 Corporate Event",  color:"#60a5fa", subEvents:["Conference","Award Night","Team Outing","Product Launch","Annual Meet"] },
+  { id:"other",        label:"✨ Other Event",       color:"#f472b6", subEvents:[] },
+];
 const STATUS_COLOR = { Confirmed:"#4ade80", Pending:"#fbbf24", Declined:"#f87171" };
-const EVENT_COLOR = { "Mehndi":"#f472b6","Sangeet":"#a78bfa","Haldi":"#fbbf24","Wedding Ceremony":"#c9a96e","Reception":"#34d399","Pre-Wedding Shoot":"#60a5fa","Engagement":"#fb923c" };
+const EVENT_COLOR = { "Mehndi":"#f472b6","Sangeet":"#a78bfa","Haldi":"#fbbf24","Wedding Ceremony":"#c9a96e","Reception":"#34d399","Pre-Wedding Shoot":"#60a5fa","Engagement":"#fb923c","Engagement Ceremony":"#fb923c","Ring Exchange":"#fb923c","Baby Shower":"#a78bfa","Maternity Shoot":"#c084fc","Baby Reveal":"#e879f9","Birthday Party":"#34d399","Cake Cutting":"#4ade80","Conference":"#60a5fa","Award Night":"#f59e0b","Team Outing":"#06b6d4","Product Launch":"#3b82f6" };
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DAY_NAMES = ["S","M","T","W","T","F","S"];
+// Legacy single-admin fallback (still works if no admins in Firebase)
 const FIXED_EMAIL = "crewstudio@gmail.com";
 const FIXED_PASS  = "Weddings@2026";
 const ADMIN_WA    = "919876543210"; // fallback only - overridden by profile
@@ -59,7 +70,20 @@ function fbListen(path, onData) {
   return () => source.close();
 }
 
-/* localStorage fallback */
+/* ── Multi-Admin helpers ── */
+async function fbGetAdmins() {
+  const data = await fbGet("crew_admins");
+  if (!data) return [];
+  return Array.isArray(data) ? data : Object.values(data || {});
+}
+async function fbSaveAdmin(adminObj) {
+  const admins = await fbGetAdmins();
+  const existing = admins.findIndex(a => a.email === adminObj.email);
+  if (existing >= 0) admins[existing] = adminObj;
+  else admins.push(adminObj);
+  await fbSet("crew_admins", admins);
+  return admins;
+}
 function loadState(key, fallback) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
   catch { return fallback; }
@@ -104,23 +128,67 @@ function useIsMobile() {
 ════════════════════════════════════════════════════════════════ */
 function AuthPage({ onLogin }) {
   const isMobile = useIsMobile();
+  const [mode, setMode] = useState("login"); // "login" | "signup"
   const [form, setForm] = useState({ email:"", password:"" });
+  const [signupForm, setSignupForm] = useState({ name:"", studioName:"", email:"", password:"", confirmPassword:"", phone:"", city:"Ahmedabad" });
   const [error, setError] = useState("");
+  const [signupError, setSignupError] = useState("");
+  const [signupSuccess, setSignupSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
+  const [showSignupPass, setShowSignupPass] = useState(false);
 
-  function handleLogin() {
+  async function handleLogin() {
     setError("");
     if (!form.email || !form.password) { setError("Please enter your email and password."); return; }
-    if (form.email.toLowerCase().trim() !== FIXED_EMAIL || form.password !== FIXED_PASS) {
-      setError("Incorrect email or password."); return;
-    }
     setLoading(true);
-    setTimeout(() => {
-      const user = { name: "Krunal Prajapati", email: FIXED_EMAIL, loggedIn: true };
-      saveState("crew_session", user);
-      onLogin(user);
-    }, 900);
+    // Check legacy fixed admin
+    if (form.email.toLowerCase().trim() === FIXED_EMAIL && form.password === FIXED_PASS) {
+      const user = { name:"Krunal Prajapati", email:FIXED_EMAIL, loggedIn:true, adminId:"legacy" };
+      saveState("crew_session", user); onLogin(user); return;
+    }
+    // Check Firebase multi-admins
+    try {
+      const admins = await fbGetAdmins();
+      const found = admins.find(a => a.email.toLowerCase() === form.email.toLowerCase().trim());
+      if (!found || found.password !== form.password) {
+        setError("Incorrect email or password."); setLoading(false); return;
+      }
+      const user = { name:found.name, email:found.email, loggedIn:true, adminId:found.id, studioName:found.studioName };
+      saveState("crew_session", user); onLogin(user);
+    } catch {
+      setError("Connection error. Please try again."); setLoading(false);
+    }
+  }
+
+  async function handleSignup() {
+    setSignupError("");
+    const { name, studioName, email, password, confirmPassword } = signupForm;
+    if (!name || !studioName || !email || !password) { setSignupError("Please fill all required fields."); return; }
+    if (password.length < 6) { setSignupError("Password must be at least 6 characters."); return; }
+    if (password !== confirmPassword) { setSignupError("Passwords don't match."); return; }
+    if (!/^[^@]+@[^@]+\.[^@]+$/.test(email)) { setSignupError("Enter a valid email address."); return; }
+    setLoading(true);
+    try {
+      const admins = await fbGetAdmins();
+      const exists = admins.find(a => a.email.toLowerCase() === email.toLowerCase());
+      if (exists || email.toLowerCase() === FIXED_EMAIL) { setSignupError("An account with this email already exists."); setLoading(false); return; }
+      const newAdmin = {
+        id: Date.now().toString(),
+        name: name.trim(), studioName: studioName.trim(),
+        email: email.toLowerCase().trim(), password,
+        phone: signupForm.phone, city: signupForm.city,
+        createdAt: new Date().toISOString(),
+      };
+      await fbSaveAdmin(newAdmin);
+      // Auto-create their data namespace
+      await fbSet(`crew_team_${newAdmin.id}`, []);
+      await fbSet(`crew_weddings_${newAdmin.id}`, []);
+      await fbSet(`crew_profile_${newAdmin.id}`, { adminName:newAdmin.name, studioName:newAdmin.studioName, waNumber:"91"+newAdmin.phone, city:newAdmin.city });
+      setSignupSuccess(true); setLoading(false);
+    } catch {
+      setSignupError("Registration failed. Please try again."); setLoading(false);
+    }
   }
 
   const S = `
@@ -133,11 +201,87 @@ function AuthPage({ onLogin }) {
     @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
   `;
 
-  /* ── MOBILE AUTH ── */
+  /* ── SIGNUP SUCCESS ── */
+  if (signupSuccess) return (
+    <div style={{minHeight:"100vh",background:"#060504",display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"'Cormorant Garamond',Georgia,serif",color:"#e8e0d4"}}>
+      <style>{S}</style>
+      <div style={{textAlign:"center",maxWidth:400,animation:"fadeUp 0.5s ease both"}}>
+        <div style={{fontSize:52,marginBottom:16}}>🎉</div>
+        <h2 style={{fontSize:32,fontWeight:300,marginBottom:10}}>Account Created!</h2>
+        <p style={{fontSize:15,color:"#7a6f63",marginBottom:28}}>Welcome to Crew Studio, {signupForm.name.split(" ")[0]}. Your studio <em style={{color:"#c9a96e"}}>{signupForm.studioName}</em> is ready.</p>
+        <button onClick={()=>{setSignupSuccess(false);setMode("login");setForm({email:signupForm.email,password:""});}}
+          style={{padding:"16px 32px",background:"linear-gradient(135deg,#c9a96e,#a8814a)",color:"#0a0a0a",border:"none",borderRadius:8,fontSize:17,fontWeight:600,cursor:"pointer",fontFamily:"'Cormorant Garamond',Georgia,serif"}}>Sign In Now →</button>
+      </div>
+    </div>
+  );
+
+  /* ── SIGNUP FORM ── */
+  if (mode === "signup") return (
+    <div style={{minHeight:"100vh",background:"#060504",display:"flex",fontFamily:"'Cormorant Garamond',Georgia,serif",color:"#e8e0d4",overflowY:"auto"}}>
+      <style>{S}</style>
+      {!isMobile&&<div style={{flex:"0 0 40%",background:"linear-gradient(160deg,#0e0b08,#060504)",borderRight:"1px solid #1a1612",display:"flex",flexDirection:"column",justifyContent:"center",padding:"48px 56px",position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",inset:0,backgroundImage:"radial-gradient(circle at 30% 70%, #c9a96e08 0%, transparent 50%)",pointerEvents:"none"}}/>
+        <div style={{display:"flex",alignItems:"baseline",gap:10,marginBottom:24}}><span style={{fontSize:28,fontWeight:300,letterSpacing:"0.1em"}}>CREW</span><span style={{fontSize:14,fontFamily:"'DM Mono',monospace",color:"#c9a96e",letterSpacing:"0.15em"}}>STUDIO</span></div>
+        <h1 style={{fontSize:42,fontWeight:300,lineHeight:1.1,marginBottom:16}}>Start your<br/><em style={{fontStyle:"italic",color:"#c9a96e"}}>own studio</em></h1>
+        <p style={{fontSize:15,color:"#7a6f63",lineHeight:1.7,fontWeight:300}}>Create your admin account and get your own Crew Studio workspace — team, events, calendar and payouts, all yours.</p>
+        <div style={{marginTop:32}}>
+          {["Your own team roster","Separate event calendar","Independent crew portal","Financial payout tracking"].map((f,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:"#c9a96e",flexShrink:0}}/>
+              <span style={{fontSize:13,color:"#5a5048",fontFamily:"'DM Mono',monospace"}}>{f}</span>
+            </div>
+          ))}
+        </div>
+      </div>}
+      <div style={{flex:1,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:isMobile?"24px":"48px"}}>
+        <div style={{width:"100%",maxWidth:480,animation:"fadeUp 0.6s ease both"}}>
+          {isMobile&&<div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:24}}><span style={{fontSize:22,fontWeight:300}}>CREW</span><span style={{fontSize:12,fontFamily:"'DM Mono',monospace",color:"#c9a96e"}}>STUDIO</span></div>}
+          <div style={{marginBottom:28}}>
+            <h2 style={{fontSize:isMobile?28:36,fontWeight:300,marginBottom:4}}>Create Account</h2>
+            <p style={{fontSize:13,color:"#5a5048"}}>Set up your studio workspace</p>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            {[
+              {label:"YOUR FULL NAME *",key:"name",placeholder:"Krunal Prajapati"},
+              {label:"STUDIO NAME *",key:"studioName",placeholder:"e.g. Pixel & Frame Studio"},
+              {label:"EMAIL ADDRESS *",key:"email",placeholder:"studio@gmail.com",type:"email"},
+              {label:"PHONE (for WhatsApp)",key:"phone",placeholder:"9876543210"},
+              {label:"CITY",key:"city",placeholder:"Ahmedabad"},
+            ].map(f=>(
+              <div key={f.key}>
+                <label style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048",letterSpacing:"0.12em",textTransform:"uppercase",display:"block",marginBottom:6}}>{f.label}</label>
+                <input type={f.type||"text"} placeholder={f.placeholder} value={signupForm[f.key]} onChange={e=>setSignupForm({...signupForm,[f.key]:e.target.value})} style={{fontSize:15}}/>
+              </div>
+            ))}
+            <div>
+              <label style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048",letterSpacing:"0.12em",textTransform:"uppercase",display:"block",marginBottom:6}}>PASSWORD *</label>
+              <div style={{position:"relative"}}>
+                <input type={showSignupPass?"text":"password"} placeholder="Min. 6 characters" value={signupForm.password} onChange={e=>setSignupForm({...signupForm,password:e.target.value})} style={{paddingRight:48,fontSize:15}}/>
+                <button onClick={()=>setShowSignupPass(!showSignupPass)} style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#5a5048",fontSize:18,cursor:"pointer",lineHeight:1,padding:0}}>{showSignupPass?"🙈":"👁"}</button>
+              </div>
+            </div>
+            <div>
+              <label style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048",letterSpacing:"0.12em",textTransform:"uppercase",display:"block",marginBottom:6}}>CONFIRM PASSWORD *</label>
+              <input type="password" placeholder="Repeat password" value={signupForm.confirmPassword} onChange={e=>setSignupForm({...signupForm,confirmPassword:e.target.value})} onKeyDown={e=>e.key==="Enter"&&handleSignup()} style={{fontSize:15}}/>
+            </div>
+          </div>
+          {signupError&&<div style={{marginTop:14,padding:"12px 16px",background:"#f8717115",border:"1px solid #f8717133",borderRadius:6,fontSize:13,color:"#f87171",fontFamily:"'DM Mono',monospace"}}>⚠ {signupError}</div>}
+          <button onClick={handleSignup} disabled={loading}
+            style={{width:"100%",marginTop:20,padding:"16px",background:loading?"#5a4a2a":"linear-gradient(135deg,#c9a96e,#a8814a)",color:"#0a0a0a",border:"none",borderRadius:8,fontSize:17,fontWeight:600,cursor:loading?"not-allowed":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:10,fontFamily:"'Cormorant Garamond',Georgia,serif"}}>
+            {loading?<><div style={{width:18,height:18,border:"2px solid #0a0a0a44",borderTopColor:"#0a0a0a",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/> Creating account…</>:"Create My Studio →"}
+          </button>
+          <div style={{marginTop:20,textAlign:"center"}}>
+            <button onClick={()=>{setMode("login");setSignupError("");}} style={{background:"none",border:"none",color:"#5a5048",fontSize:13,fontFamily:"'DM Mono',monospace",cursor:"pointer"}}>Already have an account? <span style={{color:"#c9a96e"}}>Sign In</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  /* ── MOBILE LOGIN ── */
   if (isMobile) return (
     <div style={{minHeight:"100vh",background:"#060504",display:"flex",flexDirection:"column",fontFamily:"'Cormorant Garamond',Georgia,serif",color:"#e8e0d4",padding:"0"}}>
       <style>{S}</style>
-      {/* Top hero */}
       <div style={{background:"linear-gradient(160deg,#0e0b08,#060504)",borderBottom:"1px solid #1a1612",padding:"48px 28px 36px",textAlign:"center",position:"relative",overflow:"hidden"}}>
         <div style={{position:"absolute",inset:0,backgroundImage:"radial-gradient(circle at 50% 100%, #c9a96e10 0%, transparent 60%)",pointerEvents:"none"}}/>
         <div style={{display:"flex",alignItems:"baseline",justifyContent:"center",gap:10,marginBottom:16}}>
@@ -148,8 +292,6 @@ function AuthPage({ onLogin }) {
         <h1 style={{fontSize:34,fontWeight:300,lineHeight:1.15,marginBottom:10}}>Every frame<br/><em style={{fontStyle:"italic",color:"#c9a96e"}}>tells a story</em></h1>
         <p style={{fontSize:14,color:"#5a5048",fontWeight:300}}>Wedding Film Production · Ahmedabad</p>
       </div>
-
-      {/* Form */}
       <div style={{flex:1,padding:"32px 24px",display:"flex",flexDirection:"column",gap:20,animation:"fadeUp 0.5s ease both"}}>
         <div>
           <h2 style={{fontSize:28,fontWeight:300,marginBottom:4}}>Welcome back</h2>
@@ -158,7 +300,7 @@ function AuthPage({ onLogin }) {
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
           <div>
             <label style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048",letterSpacing:"0.12em",textTransform:"uppercase",display:"block",marginBottom:6}}>Email</label>
-            <input type="email" placeholder="crewstudio@gmail.com" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} onKeyDown={e=>e.key==="Enter"&&handleLogin()} style={{fontSize:16}}/>
+            <input type="email" placeholder="your@email.com" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} onKeyDown={e=>e.key==="Enter"&&handleLogin()} style={{fontSize:16}}/>
           </div>
           <div>
             <label style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048",letterSpacing:"0.12em",textTransform:"uppercase",display:"block",marginBottom:6}}>Password</label>
@@ -173,6 +315,9 @@ function AuthPage({ onLogin }) {
           style={{padding:"18px",background:loading?"#5a4a2a":"linear-gradient(135deg,#c9a96e,#a8814a)",color:"#0a0a0a",border:"none",borderRadius:8,fontSize:17,fontWeight:600,cursor:loading?"not-allowed":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:10,fontFamily:"'Cormorant Garamond',Georgia,serif",marginTop:4}}>
           {loading?<><div style={{width:18,height:18,border:"2px solid #0a0a0a44",borderTopColor:"#0a0a0a",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/> Signing in…</>:"Sign In →"}
         </button>
+        <div style={{textAlign:"center"}}>
+          <button onClick={()=>{setMode("signup");setError("");}} style={{background:"none",border:"none",color:"#5a5048",fontSize:13,fontFamily:"'DM Mono',monospace",cursor:"pointer"}}>New studio? <span style={{color:"#c9a96e"}}>Create account →</span></button>
+        </div>
         <div style={{marginTop:"auto",paddingTop:24,borderTop:"1px solid #1a1612",textAlign:"center"}}>
           <p style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#2a2420",letterSpacing:"0.08em"}}>SECURED · DATA STAYS IN YOUR BROWSER</p>
         </div>
@@ -180,7 +325,7 @@ function AuthPage({ onLogin }) {
     </div>
   );
 
-  /* ── DESKTOP AUTH ── */
+  /* ── DESKTOP LOGIN ── */
   return (
     <div style={{minHeight:"100vh",background:"#060504",display:"flex",fontFamily:"'Cormorant Garamond',Georgia,serif",color:"#e8e0d4",overflow:"hidden"}}>
       <style>{S}</style>
@@ -215,7 +360,7 @@ function AuthPage({ onLogin }) {
           <div style={{display:"flex",flexDirection:"column",gap:16}}>
             <div>
               <label style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"#5a5048",letterSpacing:"0.12em",textTransform:"uppercase",display:"block",marginBottom:6}}>Email Address</label>
-              <input type="email" placeholder="crewstudio@gmail.com" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} onKeyDown={e=>e.key==="Enter"&&handleLogin()}/>
+              <input type="email" placeholder="your@email.com" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} onKeyDown={e=>e.key==="Enter"&&handleLogin()}/>
             </div>
             <div>
               <label style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"#5a5048",letterSpacing:"0.12em",textTransform:"uppercase",display:"block",marginBottom:6}}>Password</label>
@@ -230,7 +375,10 @@ function AuthPage({ onLogin }) {
             style={{width:"100%",marginTop:28,padding:"16px",background:loading?"#5a4a2a":"linear-gradient(135deg,#c9a96e,#a8814a)",color:"#0a0a0a",border:"none",borderRadius:6,fontSize:16,fontWeight:600,letterSpacing:"0.06em",cursor:loading?"not-allowed":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:10,transition:"all 0.25s",fontFamily:"'Cormorant Garamond',Georgia,serif"}}>
             {loading?<><div style={{width:18,height:18,border:"2px solid #0a0a0a44",borderTopColor:"#0a0a0a",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/> Signing in…</>:"Sign In to Studio →"}
           </button>
-          <div style={{marginTop:40,paddingTop:24,borderTop:"1px solid #1a1612",textAlign:"center"}}>
+          <div style={{marginTop:20,textAlign:"center"}}>
+            <button onClick={()=>{setMode("signup");setError("");}} style={{background:"none",border:"none",color:"#5a5048",fontSize:13,fontFamily:"'DM Mono',monospace",cursor:"pointer"}}>New to Crew Studio? <span style={{color:"#c9a96e"}}>Create account →</span></button>
+          </div>
+          <div style={{marginTop:32,paddingTop:24,borderTop:"1px solid #1a1612",textAlign:"center"}}>
             <p style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"#2a2420",letterSpacing:"0.08em"}}>SECURED · DATA STAYS IN YOUR BROWSER</p>
           </div>
         </div>
@@ -275,7 +423,7 @@ function MiniCalendar({ selectedDates, onToggleDate, bookedMap }) {
 }
 
 /* ─── Event Assigner ─────────────────────────────────────────── */
-function EventAssigner({ selectedDates, eventDays, setEventDays, team, weddingName }) {
+function EventAssigner({ selectedDates, eventDays, setEventDays, team, weddingName, eventType }) {
   const [assigningDate,setAssigningDate]=useState(null);
   const [customInputDate,setCustomInputDate]=useState(null);
   const [customText,setCustomText]=useState("");
@@ -291,7 +439,9 @@ function EventAssigner({ selectedDates, eventDays, setEventDays, team, weddingNa
     if(val) assignEvent(date,val);
   }
 
-  const ALL_EVENTS=[
+  // Get sub-events for this event type
+  const typeObj = EVENT_TYPES.find(et=>et.id===(eventType||"wedding"));
+  const QUICK_EVENTS = typeObj?.subEvents?.length > 0 ? typeObj.subEvents : [
     "Mehndi","Sangeet","Haldi","Wedding Ceremony","Reception",
     "Pre-Wedding Shoot","Engagement","Tilak","Ring Ceremony",
     "Garba Night","Cocktail Party","Baby Shower","Birthday","Corporate Event",
@@ -324,7 +474,7 @@ function EventAssigner({ selectedDates, eventDays, setEventDays, team, weddingNa
                 {/* Preset event buttons */}
                 <p style={{fontSize:9,fontFamily:"'DM Mono',monospace",color:"#3a3028",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:10}}>Quick Select</p>
                 <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>
-                  {ALL_EVENTS.map(ev=>(
+                  {QUICK_EVENTS.map(ev=>(
                     <button key={ev} onClick={()=>assignEvent(date,ev)}
                       style={{background:assigned?.event===ev?evColor(ev)+"44":evColor(ev)+"18",border:`1px solid ${assigned?.event===ev?evColor(ev):evColor(ev)+"44"}`,color:evColor(ev),fontSize:11,padding:"6px 12px",borderRadius:3,fontFamily:"'DM Mono',monospace",fontWeight:assigned?.event===ev?"600":"400"}}>
                       {ev}
@@ -734,14 +884,44 @@ function TeamView({ team, weddings, adminProfile }) {
         </div>
 
         {/* Stats */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:20}}>
-          {[{v:upcomingHires.length,l:"Hires"},{v:upcomingHires.filter(h=>h.status==="Confirmed").length,l:"Confirmed"},{v:pendingCount,l:"Pending",alert:pendingCount>0}].map((s,i)=>(
-            <div key={i} style={{background:"#0e0c0a",border:`1px solid ${s.alert?"#fbbf2444":"#1e1a16"}`,borderRadius:6,padding:"14px 12px"}}>
-              <div style={{fontSize:isMobile?20:26,fontWeight:300,color:s.alert?"#fbbf24":"#c9a96e"}}>{s.v}</div>
-              <div style={{fontSize:10,letterSpacing:"0.12em",textTransform:"uppercase",color:"#5a5048",marginTop:2,fontFamily:"'DM Mono',monospace"}}>{s.l}</div>
-            </div>
-          ))}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10,marginBottom:20}}>
+          {(()=>{
+            const confirmedHires=upcomingHires.filter(h=>h.status==="Confirmed");
+            const totalEarned=confirmedHires.reduce((s,h)=>s+(me?.rate||0)*(h.dayType==="Half Day"?0.5:1),0);
+            const paidAmount=confirmedHires.filter(h=>h.paid).reduce((s,h)=>s+(me?.rate||0)*(h.dayType==="Half Day"?0.5:1),0);
+            const unpaidAmount=totalEarned-paidAmount;
+            return [
+              {v:upcomingHires.length,l:"Total Bookings"},
+              {v:upcomingHires.filter(h=>h.status==="Confirmed").length,l:"Confirmed"},
+              {v:pendingCount,l:"Pending",alert:pendingCount>0},
+              {v:`₹${(me?.rate||0).toLocaleString("en-IN")}`,l:"Daily Rate"},
+            ].map((s,i)=>(
+              <div key={i} style={{background:"#0e0c0a",border:`1px solid ${s.alert?"#fbbf2444":"#1e1a16"}`,borderRadius:6,padding:"14px 12px"}}>
+                <div style={{fontSize:isMobile?20:24,fontWeight:300,color:s.alert?"#fbbf24":"#c9a96e"}}>{s.v}</div>
+                <div style={{fontSize:10,letterSpacing:"0.12em",textTransform:"uppercase",color:"#5a5048",marginTop:2,fontFamily:"'DM Mono',monospace"}}>{s.l}</div>
+              </div>
+            ));
+          })()}
         </div>
+
+        {/* Financial Summary */}
+        {(()=>{
+          const confirmedHires=upcomingHires.filter(h=>h.status==="Confirmed");
+          const totalEarned=confirmedHires.reduce((s,h)=>s+(me?.rate||0)*(h.dayType==="Half Day"?0.5:1),0);
+          const paidAmount=confirmedHires.filter(h=>h.paid).reduce((s,h)=>s+(me?.rate||0)*(h.dayType==="Half Day"?0.5:1),0);
+          const unpaidAmount=totalEarned-paidAmount;
+          return totalEarned>0?(
+            <div style={{background:"#0e0c0a",border:"1px solid #1e1a16",borderRadius:8,padding:"16px",marginBottom:20}}>
+              <p style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:12}}>Earnings Summary</p>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                <div style={{textAlign:"center"}}><div style={{fontSize:18,color:"#c9a96e",fontWeight:300}}>₹{totalEarned.toLocaleString("en-IN")}</div><div style={{fontSize:9,fontFamily:"'DM Mono',monospace",color:"#5a5048",marginTop:2}}>TOTAL</div></div>
+                <div style={{textAlign:"center"}}><div style={{fontSize:18,color:"#4ade80",fontWeight:300}}>₹{paidAmount.toLocaleString("en-IN")}</div><div style={{fontSize:9,fontFamily:"'DM Mono',monospace",color:"#5a5048",marginTop:2}}>PAID</div></div>
+                <div style={{textAlign:"center"}}><div style={{fontSize:18,color:unpaidAmount>0?"#f87171":"#5a5048",fontWeight:300}}>₹{unpaidAmount.toLocaleString("en-IN")}</div><div style={{fontSize:9,fontFamily:"'DM Mono',monospace",color:"#5a5048",marginTop:2}}>UNPAID</div></div>
+              </div>
+              {unpaidAmount>0&&<div style={{marginTop:10,padding:"8px 12px",background:"#f8717111",border:"1px solid #f8717133",borderRadius:4,fontSize:11,fontFamily:"'DM Mono',monospace",color:"#f87171"}}>₹{unpaidAmount.toLocaleString("en-IN")} pending payment from admin</div>}
+            </div>
+          ):null;
+        })()}
 
         {/* Tab switcher */}
         <div style={{display:"flex",gap:0,marginBottom:20,background:"#0e0c0a",border:"1px solid #1e1a16",borderRadius:6,overflow:"hidden"}}>
@@ -770,6 +950,7 @@ function TeamView({ team, weddings, adminProfile }) {
                         <div style={{fontSize:12,color:"#5a5048",fontFamily:"'DM Mono',monospace",marginTop:2}}>📅 {h.date}</div>
                         {wedding?.location&&<div style={{fontSize:12,color:"#5a5048",fontFamily:"'DM Mono',monospace"}}>📍 {wedding.location}</div>}
                         <div style={{fontSize:12,color:"#5a5048",fontFamily:"'DM Mono',monospace"}}>🎭 {h.hireRole} · ⏱ {h.dayType}</div>
+                        {me?.rate&&<div style={{fontSize:13,color:"#c9a96e",fontFamily:"'DM Mono',monospace",marginTop:2}}>₹{(me.rate*(h.dayType==="Half Day"?0.5:1)).toLocaleString("en-IN")} {h.paid?<span style={{fontSize:9,color:"#4ade80",background:"#4ade8011",padding:"2px 6px",borderRadius:2,border:"1px solid #4ade8022",marginLeft:4}}>PAID</span>:<span style={{fontSize:9,color:"#f87171",background:"#f8717111",padding:"2px 6px",borderRadius:2,border:"1px solid #f8717122",marginLeft:4}}>UNPAID</span>}</div>}
                       </div>
                       <span style={{background:(STATUS_COLOR[h.status]||"#fbbf24")+"22",color:STATUS_COLOR[h.status]||"#fbbf24",border:`1px solid ${STATUS_COLOR[h.status]||"#fbbf24"}44`,padding:"4px 12px",borderRadius:2,fontSize:10,fontFamily:"'DM Mono',monospace",textTransform:"uppercase",flexShrink:0}}>{h.status||"Pending"}</span>
                     </div>
@@ -799,9 +980,13 @@ function TeamView({ team, weddings, adminProfile }) {
 ════════════════════════════════════════════════════════════════ */
 function AdminApp({ user, onLogout }) {
   const isMobile=useIsMobile();
+  const adminId = user?.adminId || "legacy";
+  const teamKey = adminId === "legacy" ? "crew_team" : `crew_team_${adminId}`;
+  const weddingsKey = adminId === "legacy" ? "crew_weddings" : `crew_weddings_${adminId}`;
+  const profileKey = adminId === "legacy" ? "crew_profile" : `crew_profile_${adminId}`;
   const normalizeTeam=t=>(Array.isArray(t)?t:Object.values(t||{})).map(m=>({...m,hires:Array.isArray(m.hires)?m.hires:Object.values(m.hires||{})}));
-  const [team,setTeamRaw]=useState(()=>normalizeTeam(loadState("crew_team",INITIAL_TEAM)));
-  const [weddings,setWeddingsRaw]=useState(()=>loadState("crew_weddings",[]));
+  const [team,setTeamRaw]=useState(()=>normalizeTeam(loadState(teamKey,adminId==="legacy"?INITIAL_TEAM:[])));
+  const [weddings,setWeddingsRaw]=useState(()=>loadState(weddingsKey,[]));
   const [syncing,setSyncing]=useState(USE_FIREBASE);
 
   /* Load from Firebase on mount + listen for real-time changes */
@@ -809,34 +994,34 @@ function AdminApp({ user, onLogout }) {
     if(!USE_FIREBASE){setSyncing(false);return;}
     let closeFns=[];
     (async()=>{
-      const [fbTeam,fbWeddings,fbProfile]=await Promise.all([fbGet("crew_team"),fbGet("crew_weddings"),fbGet("crew_profile")]);
-      const teamToUse = normalizeTeam(fbTeam || INITIAL_TEAM);
+      const [fbTeam,fbWeddings,fbProfile]=await Promise.all([fbGet(teamKey),fbGet(weddingsKey),fbGet(profileKey)]);
+      const teamToUse = normalizeTeam(fbTeam || (adminId==="legacy"?INITIAL_TEAM:[]));
       const weddingsToUse = fbWeddings ? (Array.isArray(fbWeddings)?fbWeddings:Object.values(fbWeddings)) : [];
-      if(!fbTeam) await fbSet("crew_team", INITIAL_TEAM);
-      if(!fbWeddings) await fbSet("crew_weddings", []);
+      if(!fbTeam) await fbSet(teamKey, adminId==="legacy"?INITIAL_TEAM:[]);
+      if(!fbWeddings) await fbSet(weddingsKey, []);
       if(fbProfile) setProfileRaw(fbProfile);
       setTeamRaw(teamToUse);
       setWeddingsRaw(weddingsToUse);
       setSyncing(false);
     })();
-    closeFns.push(fbListen("crew_team", d=>{ if(d) setTeamRaw(normalizeTeam(d)); }));
-    closeFns.push(fbListen("crew_weddings",d=>{ if(d) setWeddingsRaw(Array.isArray(d)?d:Object.values(d||{})); }));
+    closeFns.push(fbListen(teamKey, d=>{ if(d) setTeamRaw(normalizeTeam(d)); }));
+    closeFns.push(fbListen(weddingsKey,d=>{ if(d) setWeddingsRaw(Array.isArray(d)?d:Object.values(d||{})); }));
     return ()=>closeFns.forEach(f=>f());
   },[]);
 
   function setTeam(v){
     setTeamRaw(prev=>{
       const next=typeof v==="function"?v(prev):v;
-      saveState("crew_team",next);
-      if(USE_FIREBASE) fbSet("crew_team",next);
+      saveState(teamKey,next);
+      if(USE_FIREBASE) fbSet(teamKey,next);
       return next;
     });
   }
   function setWeddings(v){
     setWeddingsRaw(prev=>{
       const next=typeof v==="function"?v(prev):v;
-      saveState("crew_weddings",next);
-      if(USE_FIREBASE) fbSet("crew_weddings",next);
+      saveState(weddingsKey,next);
+      if(USE_FIREBASE) fbSet(weddingsKey,next);
       return next;
     });
   }
@@ -852,11 +1037,11 @@ function AdminApp({ user, onLogout }) {
   const [editHire,setEditHire]=useState(null);
   const [newMember,setNewMember]=useState({name:"",role:ROLES[0],phone:"",rate:"",portalPass:""});
   const [editForm,setEditForm]=useState({name:"",role:ROLES[0],phone:"",rate:"",portalPass:""});
-  const [wForm,setWForm]=useState({name:"",bride:"",groom:"",location:"",selectedDates:[],eventDays:[]});
+  const [wForm,setWForm]=useState({name:"",bride:"",groom:"",location:"",selectedDates:[],eventDays:[],eventType:"wedding",clientName:""});
   const [hireForm,setHireForm]=useState({wedding:"",selectedEventDays:[],status:"Confirmed",dayType:"Full Day",hireRole:ROLES[0]});
-  const [editHireForm,setEditHireForm]=useState({status:"Confirmed",dayType:"Full Day",hireRole:ROLES[0]});
-  const [profile,setProfileRaw]=useState(()=>loadState("crew_profile",{
-    adminName:"Krunal Prajapati",
+  const [editHireForm,setEditHireForm]=useState({status:"Confirmed",dayType:"Full Day",hireRole:ROLES[0],paid:false});
+  const [profile,setProfileRaw]=useState(()=>loadState(profileKey,{
+    adminName: user?.name || "Krunal Prajapati",
     studioName:"Crew Studio",
     waNumber:"919876543210",
     city:"Ahmedabad",
@@ -867,8 +1052,8 @@ function AdminApp({ user, onLogout }) {
   function setProfile(v){
     setProfileRaw(prev=>{
       const next=typeof v==="function"?v(prev):v;
-      saveState("crew_profile",next);
-      if(USE_FIREBASE) fbSet("crew_profile",next);
+      saveState(profileKey,next);
+      if(USE_FIREBASE) fbSet(profileKey,next);
       return next;
     });
   }
@@ -884,8 +1069,8 @@ const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings
     </div>
   );
 
-  function openAddWedding(){setWForm({name:"",bride:"",groom:"",location:"",selectedDates:[],eventDays:[]});setEditWedding(null);setShowAddWedding(true);}
-  function openEditWedding(w){setWForm({name:w.name,bride:w.bride,groom:w.groom,location:w.location,selectedDates:[...(w.selectedDates||[])],eventDays:[...(w.eventDays||[])]});setEditWedding(w);setShowAddWedding(true);}
+  function openAddWedding(){setWForm({name:"",bride:"",groom:"",location:"",selectedDates:[],eventDays:[],eventType:"wedding",clientName:""});setEditWedding(null);setShowAddWedding(true);}
+  function openEditWedding(w){setWForm({name:w.name,bride:w.bride||"",groom:w.groom||"",location:w.location||"",selectedDates:[...(w.selectedDates||[])],eventDays:[...(w.eventDays||[])],eventType:w.eventType||"wedding",clientName:w.clientName||""});setEditWedding(w);setShowAddWedding(true);}
   function toggleWDate(ds){setWForm(prev=>{const already=prev.selectedDates.includes(ds);return{...prev,selectedDates:already?prev.selectedDates.filter(d=>d!==ds):[...prev.selectedDates,ds].sort(),eventDays:already?prev.eventDays.filter(ed=>ed.date!==ds):prev.eventDays};});}
   function saveWedding(){if(!wForm.name)return;if(editWedding){setWeddings(weddings.map(w=>w.id===editWedding.id?{...w,...wForm}:w));}else{setWeddings([...weddings,{id:Date.now(),...wForm}]);}setShowAddWedding(false);}
   function removeWedding(id){setWeddings(weddings.filter(w=>w.id!==id));}
@@ -893,9 +1078,10 @@ const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings
   function saveEditMember(){const pp=editForm.portalPass||editMember?.portalPass||"";setTeam(team.map(m=>m.id===editMember.id?{...m,...editForm,rate:Number(editForm.rate),portalPass:pp}:m));setEditMember(null);}
   function removeMember(id){setTeam(team.filter(m=>m.id!==id));}
   function toggleEventDay(key){setHireForm(prev=>({...prev,selectedEventDays:prev.selectedEventDays.includes(key)?prev.selectedEventDays.filter(k=>k!==key):[...prev.selectedEventDays,key]}));}
-  function addBulkHire(memberId){if(!hireForm.wedding||hireForm.selectedEventDays.length===0)return;const newHires=hireForm.selectedEventDays.map(key=>{const[date,...evParts]=key.split("|");const event=evParts.join("|");return{wedding:hireForm.wedding,event,date,status:hireForm.status,dayType:hireForm.dayType,hireRole:hireForm.hireRole};});setTeam(team.map(m=>m.id===memberId?{...m,hires:[...m.hires,...newHires]}:m));setHireForm({wedding:"",selectedEventDays:[],status:"Confirmed",dayType:"Full Day",hireRole:ROLES[0]});setShowAddHire(null);}
-  function openEditHire(memberId,hireIdx){const hire=team.find(m=>m.id===memberId)?.hires[hireIdx];if(!hire)return;setEditHireForm({status:hire.status||"Pending",dayType:hire.dayType||"Full Day",hireRole:hire.hireRole||ROLES[0]});setEditHire({memberId,hireIdx});}
+  function addBulkHire(memberId){if(!hireForm.wedding||hireForm.selectedEventDays.length===0)return;const newHires=hireForm.selectedEventDays.map(key=>{const[date,...evParts]=key.split("|");const event=evParts.join("|");return{wedding:hireForm.wedding,event,date,status:hireForm.status,dayType:hireForm.dayType,hireRole:hireForm.hireRole,paid:false};});setTeam(team.map(m=>m.id===memberId?{...m,hires:[...m.hires,...newHires]}:m));setHireForm({wedding:"",selectedEventDays:[],status:"Confirmed",dayType:"Full Day",hireRole:ROLES[0]});setShowAddHire(null);}
+  function openEditHire(memberId,hireIdx){const hire=team.find(m=>m.id===memberId)?.hires[hireIdx];if(!hire)return;setEditHireForm({status:hire.status||"Pending",dayType:hire.dayType||"Full Day",hireRole:hire.hireRole||ROLES[0],paid:hire.paid||false});setEditHire({memberId,hireIdx});}
   function saveEditHire(){setTeam(team.map(m=>m.id===editHire.memberId?{...m,hires:m.hires.map((h,i)=>i===editHire.hireIdx?{...h,...editHireForm}:h)}:m));setEditHire(null);}
+  function toggleHirePaid(memberId,hireIdx){setTeam(team.map(m=>m.id===memberId?{...m,hires:m.hires.map((h,i)=>i===hireIdx?{...h,paid:!h.paid}:h)}:m));}
   function removeHire(memberId,idx){setTeam(team.map(m=>m.id===memberId?{...m,hires:m.hires.filter((_,i)=>i!==idx)}:m));}
   function getWeddingEventDays(weddingName){const w=weddings.find(x=>x.name===weddingName);return w?(w.eventDays||[]):[]; }
   function sendWAToMember(member,hire){
@@ -951,7 +1137,7 @@ const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings
           <span style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"#c9a96e"}}>STUDIO</span>
         </div>
         <div style={{display:"flex",gap:10,alignItems:"center"}}>
-          {view==="weddings"&&<button className="btn-gold" style={{padding:"8px 14px",fontSize:13}} onClick={openAddWedding}>+ Wedding</button>}
+          {view==="weddings"&&<button className="btn-gold" style={{padding:"8px 14px",fontSize:13}} onClick={openAddWedding}>+ Event</button>}
           {view==="team"&&<button className="btn-gold" style={{padding:"8px 14px",fontSize:13}} onClick={()=>setShowAddMember(true)}>+ Member</button>}
           <button onClick={onLogout} style={{background:"none",border:"1px solid #2a2420",color:"#5a5048",fontSize:11,padding:"6px 10px",borderRadius:4,fontFamily:"'DM Mono',monospace"}}>↩</button>
         </div>
@@ -1018,12 +1204,17 @@ const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings
               <h1 style={{fontSize:26,fontWeight:300,marginBottom:2}}>{m.name}</h1>
               <p style={{fontSize:12,color:"#5a5048",fontFamily:"'DM Mono',monospace",marginBottom:16}}>{m.role} · ₹{m.rate?.toLocaleString("en-IN")}/day</p>
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:20}}>
-                {[{v:m.hires.length,l:"Hires"},{v:m.hires.filter(h=>h.status==="Confirmed").length,l:"OK"},{v:`₹${m.hires.reduce((s,h)=>s+m.rate*(h.dayType==="Half Day"?0.5:1),0).toLocaleString("en-IN")}`,l:"Payout"}].map((s,i)=>(
-                  <div key={i} style={{background:"#0e0c0a",border:"1px solid #1e1a16",borderRadius:6,padding:"12px 10px"}}>
-                    <div style={{fontSize:18,fontWeight:300,color:"#c9a96e"}}>{s.v}</div>
-                    <div style={{fontSize:9,letterSpacing:"0.12em",textTransform:"uppercase",color:"#5a5048",marginTop:2,fontFamily:"'DM Mono',monospace"}}>{s.l}</div>
-                  </div>
-                ))}
+                {(()=>{
+                  const totalPay=m.hires.reduce((s,h)=>s+m.rate*(h.dayType==="Half Day"?0.5:1),0);
+                  const paidPay=m.hires.filter(h=>h.paid).reduce((s,h)=>s+m.rate*(h.dayType==="Half Day"?0.5:1),0);
+                  const unpaidPay=totalPay-paidPay;
+                  return [{v:m.hires.length,l:"Hires"},{v:`₹${paidPay.toLocaleString("en-IN")}`,l:"Paid",c:"#4ade80"},{v:`₹${unpaidPay.toLocaleString("en-IN")}`,l:"Unpaid",c:"#f87171",alert:unpaidPay>0}].map((s,i)=>(
+                    <div key={i} style={{background:"#0e0c0a",border:`1px solid ${s.alert?"#f8717133":"#1e1a16"}`,borderRadius:6,padding:"12px 10px"}}>
+                      <div style={{fontSize:15,fontWeight:300,color:s.c||"#c9a96e"}}>{s.v}</div>
+                      <div style={{fontSize:9,letterSpacing:"0.12em",textTransform:"uppercase",color:"#5a5048",marginTop:2,fontFamily:"'DM Mono',monospace"}}>{s.l}</div>
+                    </div>
+                  ));
+                })()}
               </div>
               <div style={{display:"flex",gap:8,marginBottom:20}}>
                 <button className="btn-gold" style={{flex:1,fontSize:14}} onClick={()=>{setHireForm({wedding:"",selectedEventDays:[],status:"Confirmed",dayType:"Full Day",hireRole:m.role});setShowAddHire(m.id);}}>+ Add Hire</button>
@@ -1037,12 +1228,13 @@ const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings
                       <div style={{fontSize:15,fontWeight:500}}>{h.wedding}</div>
                       <div style={{fontSize:13,color:evColor(h.event)}}>{h.event}</div>
                       <div style={{fontSize:11,color:"#5a5048",fontFamily:"'DM Mono',monospace",marginTop:4}}>{h.date} · {h.dayType}</div>
-                      <div style={{fontSize:13,color:"#c9a96e",marginTop:2}}>₹{(m.rate*(h.dayType==="Half Day"?0.5:1)).toLocaleString("en-IN")}</div>
+                      <div style={{fontSize:13,color:"#c9a96e",marginTop:2}}>₹{(m.rate*(h.dayType==="Half Day"?0.5:1)).toLocaleString("en-IN")} {h.paid?<span style={{fontSize:9,fontFamily:"'DM Mono',monospace",color:"#4ade80",background:"#4ade8011",border:"1px solid #4ade8022",padding:"2px 6px",borderRadius:2,marginLeft:4}}>PAID</span>:<span style={{fontSize:9,fontFamily:"'DM Mono',monospace",color:"#f87171",background:"#f8717111",border:"1px solid #f8717122",padding:"2px 6px",borderRadius:2,marginLeft:4}}>UNPAID</span>}</div>
                     </div>
                     <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"flex-end"}}>
                       <span className="tag" style={{background:(STATUS_COLOR[h.status]||"#fbbf24")+"22",color:STATUS_COLOR[h.status]||"#fbbf24"}}>{h.status||"Pending"}</span>
                       <div style={{display:"flex",gap:4}}>
                         <button onClick={()=>sendWAToMember(m,h)} style={{background:"#25D36622",border:"1px solid #25D36644",color:"#25D366",fontSize:11,padding:"4px 8px",borderRadius:3,fontFamily:"'DM Mono',monospace"}}>WA</button>
+                        <button onClick={()=>toggleHirePaid(m.id,m.hires.indexOf(h))} style={{background:h.paid?"#4ade8022":"#f8717122",border:`1px solid ${h.paid?"#4ade8044":"#f8717144"}`,color:h.paid?"#4ade80":"#f87171",fontSize:11,padding:"4px 8px",borderRadius:3,fontFamily:"'DM Mono',monospace"}}>{h.paid?"✓ Paid":"Mark Paid"}</button>
                         <button onClick={()=>openEditHire(m.id,m.hires.indexOf(h))} style={{background:"#1a1612",border:"1px solid #2a2420",color:"#7a6f63",fontSize:11,padding:"4px 8px",borderRadius:3,fontFamily:"'DM Mono',monospace"}}>Edit</button>
                         <button onClick={()=>removeHire(m.id,m.hires.indexOf(h))} style={{background:"none",border:"none",color:"#3a3028",fontSize:16}}>×</button>
                       </div>
@@ -1186,8 +1378,9 @@ const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings
         {view==="dashboard"&&(<div className="fade-in">
           <div style={{marginBottom:36}}><p style={{fontSize:11,fontFamily:"'DM Mono',monospace",letterSpacing:"0.18em",color:"#5a5048",textTransform:"uppercase"}}>Overview</p><h1 style={{fontSize:42,fontWeight:300,marginTop:4}}>Dashboard</h1></div>
           <div style={{background:"#0e0c0a",border:"1px solid #c9a96e33",borderRadius:6,padding:"16px 20px",marginBottom:32,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
-            <div><p style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"#c9a96e",textTransform:"uppercase",marginBottom:4}}>Team Portal Link</p><p style={{fontSize:12,color:"#5a5048",fontFamily:"'DM Mono',monospace"}}>{window.location.href.split("#")[0]}#team</p></div>
-            <button onClick={()=>navigator.clipboard.writeText(window.location.href.split("#")[0]+"#team")} style={{background:"#c9a96e22",border:"1px solid #c9a96e44",color:"#c9a96e",padding:"8px 16px",borderRadius:3,fontSize:12,fontFamily:"'DM Mono',monospace"}}>📋 Copy Link</button>
+            <div><p style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"#c9a96e",textTransform:"uppercase",marginBottom:4}}>Team Portal Link</p>
+            <p style={{fontSize:12,color:"#5a5048",fontFamily:"'DM Mono',monospace"}}>{window.location.href.split("#")[0]}#{adminId==="legacy"?"team":`team-${adminId}`}</p></div>
+            <button onClick={()=>navigator.clipboard.writeText(window.location.href.split("#")[0]+"#"+(adminId==="legacy"?"team":`team-${adminId}`))} style={{background:"#c9a96e22",border:"1px solid #c9a96e44",color:"#c9a96e",padding:"8px 16px",borderRadius:3,fontSize:12,fontFamily:"'DM Mono',monospace"}}>📋 Copy Link</button>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:16,marginBottom:40}}>
             {[{num:stats.totalMembers,label:"Team Members"},{num:stats.totalWeddings,label:"Weddings"},{num:stats.totalHires,label:"Total Hires"},{num:stats.confirmedHires,label:"Confirmed"}].map((s,i)=>(
@@ -1208,12 +1401,23 @@ const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings
             </div>
             <div>
               <p style={{fontSize:11,fontFamily:"'DM Mono',monospace",letterSpacing:"0.15em",color:"#5a5048",textTransform:"uppercase",marginBottom:16}}>Team Payout</p>
-              {team.map(m=>{const total=m.hires.reduce((s,h)=>s+m.rate*(h.dayType==="Half Day"?0.5:1),0);return(
-                <div key={m.id} style={{background:"#0e0c0a",border:"1px solid #1e1a16",borderRadius:4,padding:"12px 16px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <div><div style={{fontSize:15}}>{m.name}</div><div style={{fontSize:11,color:"#5a5048",fontFamily:"'DM Mono',monospace"}}>{m.hires.length} hires</div></div>
-                  <div style={{fontSize:14,color:"#c9a96e"}}>₹{total.toLocaleString("en-IN")}</div>
-                </div>
-              );})}
+              {team.map(m=>{
+                const total=m.hires.filter(h=>h.status==="Confirmed").reduce((s,h)=>s+m.rate*(h.dayType==="Half Day"?0.5:1),0);
+                const paid=m.hires.filter(h=>h.paid).reduce((s,h)=>s+m.rate*(h.dayType==="Half Day"?0.5:1),0);
+                const unpaid=total-paid;
+                return(
+                  <div key={m.id} style={{background:"#0e0c0a",border:"1px solid #1e1a16",borderRadius:4,padding:"12px 16px",marginBottom:8}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                      <div><div style={{fontSize:14}}>{m.name}</div><div style={{fontSize:10,color:"#5a5048",fontFamily:"'DM Mono',monospace"}}>{m.hires.length} hires · ₹{m.rate?.toLocaleString("en-IN")}/day</div></div>
+                      <div style={{fontSize:14,color:"#c9a96e"}}>₹{total.toLocaleString("en-IN")}</div>
+                    </div>
+                    <div style={{display:"flex",gap:6}}>
+                      <div style={{flex:1,background:"#4ade8011",border:"1px solid #4ade8022",borderRadius:3,padding:"4px 8px",textAlign:"center"}}><div style={{fontSize:11,color:"#4ade80"}}>₹{paid.toLocaleString("en-IN")}</div><div style={{fontSize:8,fontFamily:"'DM Mono',monospace",color:"#5a5048"}}>PAID</div></div>
+                      <div style={{flex:1,background:unpaid>0?"#f8717111":"#1a1612",border:`1px solid ${unpaid>0?"#f8717122":"#2a2420"}`,borderRadius:3,padding:"4px 8px",textAlign:"center"}}><div style={{fontSize:11,color:unpaid>0?"#f87171":"#3a3028"}}>₹{unpaid.toLocaleString("en-IN")}</div><div style={{fontSize:8,fontFamily:"'DM Mono',monospace",color:"#5a5048"}}>UNPAID</div></div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>)}
@@ -1248,10 +1452,24 @@ const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings
             <button className="btn-ghost" style={{marginBottom:24}} onClick={()=>setView("team")}>← Back</button>
             <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:4}}><h1 style={{fontSize:40,fontWeight:300}}>{m.name}</h1><button className="btn-ghost" onClick={()=>{setEditForm({name:m.name,role:m.role,phone:m.phone||"",rate:m.rate,portalPass:m.portalPass||""});setEditMember(m);}}>Edit</button></div>
             <p style={{color:"#5a5048",fontFamily:"'DM Mono',monospace",fontSize:13,marginBottom:24}}>{m.role} · {m.phone} · ₹{m.rate?.toLocaleString("en-IN")}/day</p>
-            <div style={{display:"flex",gap:20,marginBottom:28}}>
-              {[{v:m.hires.length,l:"Assignments"},{v:m.hires.filter(h=>h.status==="Confirmed").length,l:"Confirmed"},{v:`₹${m.hires.reduce((s,h)=>s+m.rate*(h.dayType==="Half Day"?0.5:1),0).toLocaleString("en-IN")}`,l:"Total Payout"}].map((s,i)=>(
-                <div key={i} style={{background:"#0e0c0a",border:"1px solid #1e1a16",borderRadius:4,padding:"16px 20px"}}><div style={{fontSize:24,fontWeight:300,color:"#c9a96e",lineHeight:1}}>{s.v}</div><div style={{fontSize:10,letterSpacing:"0.15em",textTransform:"uppercase",color:"#5a5048",marginTop:4,fontFamily:"'DM Mono',monospace"}}>{s.l}</div></div>
-              ))}
+            <div style={{display:"flex",gap:16,marginBottom:28,flexWrap:"wrap"}}>
+              {(()=>{
+                const totalPay=m.hires.reduce((s,h)=>s+m.rate*(h.dayType==="Half Day"?0.5:1),0);
+                const paidPay=m.hires.filter(h=>h.paid).reduce((s,h)=>s+m.rate*(h.dayType==="Half Day"?0.5:1),0);
+                const unpaidPay=totalPay-paidPay;
+                return [
+                  {v:m.hires.length,l:"Assignments",c:"#c9a96e"},
+                  {v:m.hires.filter(h=>h.status==="Confirmed").length,l:"Confirmed",c:"#c9a96e"},
+                  {v:`₹${totalPay.toLocaleString("en-IN")}`,l:"Total Payout",c:"#c9a96e"},
+                  {v:`₹${paidPay.toLocaleString("en-IN")}`,l:"Paid",c:"#4ade80"},
+                  {v:`₹${unpaidPay.toLocaleString("en-IN")}`,l:"Unpaid",c:"#f87171",alert:unpaidPay>0},
+                ].map((s,i)=>(
+                  <div key={i} style={{background:"#0e0c0a",border:`1px solid ${s.alert?"#f8717133":"#1e1a16"}`,borderRadius:4,padding:"16px 20px"}}>
+                    <div style={{fontSize:22,fontWeight:300,color:s.c,lineHeight:1}}>{s.v}</div>
+                    <div style={{fontSize:10,letterSpacing:"0.15em",textTransform:"uppercase",color:"#5a5048",marginTop:4,fontFamily:"'DM Mono',monospace"}}>{s.l}</div>
+                  </div>
+                ));
+              })()}
             </div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
               <p style={{fontSize:11,fontFamily:"'DM Mono',monospace",letterSpacing:"0.15em",color:"#5a5048",textTransform:"uppercase"}}>Hire History</p>
@@ -1261,9 +1479,10 @@ const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings
             :[...m.hires].sort((a,b)=>a.date.localeCompare(b.date)).map((h,i)=>(
               <div key={i} style={{background:"#0e0c0a",border:"1px solid #1e1a16",borderLeft:`3px solid ${evColor(h.event)}`,borderRadius:4,padding:"16px 20px",marginBottom:8}}>
                 <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
-                  <div><div style={{fontSize:16,fontWeight:500}}>{h.wedding}</div><div style={{fontSize:13,color:evColor(h.event)}}>{h.event}</div><div style={{fontSize:12,color:"#5a5048",fontFamily:"'DM Mono',monospace",marginTop:4}}>{h.date} · {h.hireRole||m.role} · {h.dayType||"Full Day"} · ₹{(m.rate*(h.dayType==="Half Day"?0.5:1)).toLocaleString("en-IN")}</div></div>
+                  <div><div style={{fontSize:16,fontWeight:500}}>{h.wedding}</div><div style={{fontSize:13,color:evColor(h.event)}}>{h.event}</div><div style={{fontSize:12,color:"#5a5048",fontFamily:"'DM Mono',monospace",marginTop:4}}>{h.date} · {h.hireRole||m.role} · {h.dayType||"Full Day"} · ₹{(m.rate*(h.dayType==="Half Day"?0.5:1)).toLocaleString("en-IN")} {h.paid?<span style={{color:"#4ade80",fontSize:10,background:"#4ade8011",padding:"1px 7px",borderRadius:2,border:"1px solid #4ade8022"}}>PAID</span>:<span style={{color:"#f87171",fontSize:10,background:"#f8717111",padding:"1px 7px",borderRadius:2,border:"1px solid #f8717122"}}>UNPAID</span>}</div></div>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
                     <span className="tag" style={{background:(STATUS_COLOR[h.status]||"#fbbf24")+"22",color:STATUS_COLOR[h.status]||"#fbbf24"}}>{h.status||"Pending"}</span>
+                    <button onClick={()=>toggleHirePaid(m.id,m.hires.indexOf(h))} style={{background:h.paid?"#4ade8022":"#f8717122",border:`1px solid ${h.paid?"#4ade8044":"#f8717144"}`,color:h.paid?"#4ade80":"#f87171",fontSize:11,padding:"4px 10px",borderRadius:3,fontFamily:"'DM Mono',monospace"}}>{h.paid?"✓ Paid":"Mark Paid"}</button>
                     <button onClick={()=>sendWAToMember(m,h)} style={{background:"#25D36622",border:"1px solid #25D36644",color:"#25D366",fontSize:11,padding:"4px 10px",borderRadius:3,fontFamily:"'DM Mono',monospace"}}>WA</button>
                     <button onClick={()=>openEditHire(m.id,m.hires.indexOf(h))} style={{background:"none",border:"1px solid #2a2420",color:"#7a6f63",fontSize:11,padding:"4px 10px",borderRadius:3,fontFamily:"'DM Mono',monospace"}}>Edit</button>
                     <button onClick={()=>removeHire(m.id,m.hires.indexOf(h))} style={{background:"none",border:"none",color:"#3a3028",fontSize:18}}>×</button>
@@ -1359,15 +1578,51 @@ const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings
     const mClass = isMobile ? "overlay" : "overlay modal-desktop";
     return (<>
       {showAddWedding&&(<div className={mClass} onClick={()=>setShowAddWedding(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}><h2 style={{fontSize:22,fontWeight:400}}>{editWedding?"Edit Wedding":"New Wedding"}</h2><button onClick={()=>setShowAddWedding(false)} style={{background:"none",border:"none",color:"#5a5048",fontSize:22}}>×</button></div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}><h2 style={{fontSize:22,fontWeight:400}}>{editWedding?"Edit Event":"New Event"}</h2><button onClick={()=>setShowAddWedding(false)} style={{background:"none",border:"none",color:"#5a5048",fontSize:22}}>×</button></div>
+        
+        {/* Event Type Selector */}
+        {!editWedding&&(<div style={{marginBottom:16}}>
+          <p style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:10}}>Event Type</p>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+            {EVENT_TYPES.map(et=>(
+              <button key={et.id} onClick={()=>setWForm(f=>({...f,eventType:et.id,bride:"",groom:"",clientName:"",eventDays:[]}))}
+                style={{padding:"10px 12px",borderRadius:6,border:`1px solid ${wForm.eventType===et.id?et.color:"#2a2420"}`,background:wForm.eventType===et.id?et.color+"22":"#0e0c0a",color:wForm.eventType===et.id?et.color:"#5a5048",fontSize:12,fontFamily:"'DM Mono',monospace",textAlign:"left",cursor:"pointer",transition:"all 0.15s"}}>
+                {et.label}
+              </button>
+            ))}
+          </div>
+        </div>)}
+        {editWedding&&(<div style={{marginBottom:12,padding:"8px 12px",background:"#c9a96e11",border:"1px solid #c9a96e33",borderRadius:4}}>
+          <span style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"#c9a96e"}}>{EVENT_TYPES.find(et=>et.id===wForm.eventType)?.label||"💍 Wedding"}</span>
+        </div>)}
+
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          <input placeholder="Wedding Name" value={wForm.name} onChange={e=>setWForm({...wForm,name:e.target.value})}/>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><input placeholder="Bride's Name" value={wForm.bride} onChange={e=>setWForm({...wForm,bride:e.target.value})}/><input placeholder="Groom's Name" value={wForm.groom} onChange={e=>setWForm({...wForm,groom:e.target.value})}/></div>
-          <input placeholder="Location" value={wForm.location} onChange={e=>setWForm({...wForm,location:e.target.value})}/>
+          <input placeholder="Event / Project Name *" value={wForm.name} onChange={e=>setWForm({...wForm,name:e.target.value})}/>
+          
+          {/* Wedding: bride & groom */}
+          {wForm.eventType==="wedding"&&(
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <input placeholder="Bride's Name" value={wForm.bride||""} onChange={e=>setWForm({...wForm,bride:e.target.value})}/>
+              <input placeholder="Groom's Name" value={wForm.groom||""} onChange={e=>setWForm({...wForm,groom:e.target.value})}/>
+            </div>
+          )}
+          {/* Engagement: partner names */}
+          {wForm.eventType==="engagement"&&(
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <input placeholder="Partner 1 Name" value={wForm.bride||""} onChange={e=>setWForm({...wForm,bride:e.target.value})}/>
+              <input placeholder="Partner 2 Name" value={wForm.groom||""} onChange={e=>setWForm({...wForm,groom:e.target.value})}/>
+            </div>
+          )}
+          {/* Other types: single client name */}
+          {(wForm.eventType==="babyshower"||wForm.eventType==="birthday"||wForm.eventType==="corporate"||wForm.eventType==="other")&&(
+            <input placeholder={wForm.eventType==="corporate"?"Company / Client Name":"Client / Host Name"} value={wForm.clientName||""} onChange={e=>setWForm({...wForm,clientName:e.target.value})}/>
+          )}
+
+          <input placeholder="Location / Venue" value={wForm.location||""} onChange={e=>setWForm({...wForm,location:e.target.value})}/>
           <div><p style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048",textTransform:"uppercase",marginBottom:8}}>Select Days</p><MiniCalendar selectedDates={wForm.selectedDates} onToggleDate={toggleWDate} bookedMap={bookedMap}/></div>
-          {wForm.selectedDates.length>0&&<EventAssigner selectedDates={wForm.selectedDates} eventDays={wForm.eventDays} setEventDays={fn=>setWForm(prev=>({...prev,eventDays:typeof fn==="function"?fn(prev.eventDays):fn}))} team={team} weddingName={editWedding?.name||null}/>}
+          {wForm.selectedDates.length>0&&<EventAssigner selectedDates={wForm.selectedDates} eventDays={wForm.eventDays} setEventDays={fn=>setWForm(prev=>({...prev,eventDays:typeof fn==="function"?fn(prev.eventDays):fn}))} team={team} weddingName={editWedding?.name||null} eventType={wForm.eventType}/>}
         </div>
-        <div style={{display:"flex",gap:10,marginTop:20}}><button className="btn-gold" style={{flex:1}} onClick={saveWedding}>{editWedding?"Save Changes":"Save Wedding"}</button><button className="btn-ghost" onClick={()=>setShowAddWedding(false)}>Cancel</button></div>
+        <div style={{display:"flex",gap:10,marginTop:20}}><button className="btn-gold" style={{flex:1}} onClick={saveWedding}>{editWedding?"Save Changes":"Save Event"}</button><button className="btn-ghost" onClick={()=>setShowAddWedding(false)}>Cancel</button></div>
       </div></div>)}
 
       {showAddMember&&(<div className={mClass} onClick={()=>setShowAddMember(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
@@ -1436,6 +1691,13 @@ const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings
             <div style={{display:"flex",gap:8}}>{["Full Day","Half Day"].map(dt=><button key={dt} onClick={()=>setEditHireForm({...editHireForm,dayType:dt})} style={{flex:1,padding:"10px",borderRadius:4,border:`1px solid ${editHireForm.dayType===dt?"#c9a96e":"#2a2420"}`,background:editHireForm.dayType===dt?"#c9a96e22":"#0e0c0a",color:editHireForm.dayType===dt?"#c9a96e":"#5a5048",fontSize:13,fontFamily:"'DM Mono',monospace"}}>{dt}</button>)}</div>
             <select value={editHireForm.hireRole} onChange={e=>setEditHireForm({...editHireForm,hireRole:e.target.value})}>{ROLES.map(r=><option key={r}>{r}</option>)}</select>
             <div style={{display:"flex",gap:8}}>{["Confirmed","Pending","Declined"].map(s=><button key={s} onClick={()=>setEditHireForm({...editHireForm,status:s})} style={{flex:1,padding:"8px",borderRadius:4,border:`1px solid ${editHireForm.status===s?STATUS_COLOR[s]:"#2a2420"}`,background:editHireForm.status===s?STATUS_COLOR[s]+"22":"#0e0c0a",color:editHireForm.status===s?STATUS_COLOR[s]:"#5a5048",fontSize:12,fontFamily:"'DM Mono',monospace"}}>{s}</button>)}</div>
+            <div style={{borderTop:"1px solid #1e1a16",paddingTop:12}}>
+              <p style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#5a5048",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:8}}>Payment Status</p>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>setEditHireForm({...editHireForm,paid:false})} style={{flex:1,padding:"10px",borderRadius:4,border:`1px solid ${!editHireForm.paid?"#f87171":"#2a2420"}`,background:!editHireForm.paid?"#f8717122":"#0e0c0a",color:!editHireForm.paid?"#f87171":"#5a5048",fontSize:13,fontFamily:"'DM Mono',monospace"}}>Unpaid</button>
+                <button onClick={()=>setEditHireForm({...editHireForm,paid:true})} style={{flex:1,padding:"10px",borderRadius:4,border:`1px solid ${editHireForm.paid?"#4ade80":"#2a2420"}`,background:editHireForm.paid?"#4ade8022":"#0e0c0a",color:editHireForm.paid?"#4ade80":"#5a5048",fontSize:13,fontFamily:"'DM Mono',monospace"}}>✓ Paid</button>
+              </div>
+            </div>
           </div>
           <div style={{display:"flex",gap:10,marginTop:20}}><button className="btn-gold" style={{flex:1}} onClick={saveEditHire}>Save</button><button className="btn-ghost" onClick={()=>setEditHire(null)}>Cancel</button></div>
         </div></div>
@@ -1448,20 +1710,25 @@ const stats=useMemo(()=>({totalMembers:(team||[]).length,totalWeddings:(weddings
    ROOT
 ════════════════════════════════════════════════════════════════ */
 export default function Root() {
-  const isTeamView = window.location.hash === "#team";
+  const hash = window.location.hash;
+  const isTeamView = hash.startsWith("#team");
+  // Extract adminId from hash: #team or #team-ADMINID
+  const hashAdminId = hash.startsWith("#team-") ? hash.replace("#team-","") : "legacy";
   const [session, setSession] = useState(()=>loadState("crew_session", null));
   const normalizeTeam=t=>(Array.isArray(t)?t:Object.values(t||{})).map(m=>({...m,hires:Array.isArray(m.hires)?m.hires:Object.values(m.hires||{})}));
-  const [teamData, setTeamData] = useState(()=>normalizeTeam(loadState("crew_team", INITIAL_TEAM)));
-  const [weddingsData, setWeddingsData] = useState(()=>loadState("crew_weddings", []));
+  const teamKey = hashAdminId === "legacy" ? "crew_team" : `crew_team_${hashAdminId}`;
+  const weddingsKey = hashAdminId === "legacy" ? "crew_weddings" : `crew_weddings_${hashAdminId}`;
+  const profileKey = hashAdminId === "legacy" ? "crew_profile" : `crew_profile_${hashAdminId}`;
+  const [teamData, setTeamData] = useState(()=>normalizeTeam(loadState(teamKey, INITIAL_TEAM)));
+  const [weddingsData, setWeddingsData] = useState(()=>loadState(weddingsKey, []));
   const [portalReady, setPortalReady] = useState(!isTeamView || !USE_FIREBASE);
-
-  const [profileData, setProfileData] = useState(()=>loadState("crew_profile",{adminName:"Krunal Prajapati",waNumber:"919876543210"}));
+  const [profileData, setProfileData] = useState(()=>loadState(profileKey,{adminName:"Krunal Prajapati",waNumber:"919876543210"}));
 
   // For crew portal: load live data from Firebase
   useEffect(()=>{
     if(!isTeamView || !USE_FIREBASE) return;
     (async()=>{
-      const [fbTeam, fbWeddings, fbProfile] = await Promise.all([fbGet("crew_team"), fbGet("crew_weddings"), fbGet("crew_profile")]);
+      const [fbTeam, fbWeddings, fbProfile] = await Promise.all([fbGet(teamKey), fbGet(weddingsKey), fbGet(profileKey)]);
       if(fbTeam) setTeamData(normalizeTeam(fbTeam));
       if(fbWeddings) setWeddingsData(Array.isArray(fbWeddings)?fbWeddings:Object.values(fbWeddings||{}));
       if(fbProfile) setProfileData(fbProfile);
