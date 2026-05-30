@@ -277,29 +277,83 @@ function MiniCalendar({ selectedDates, onToggleDate, bookedMap }) {
 /* ─── Event Assigner ─────────────────────────────────────────── */
 function EventAssigner({ selectedDates, eventDays, setEventDays, team, weddingName }) {
   const [assigningDate,setAssigningDate]=useState(null);
+  const [customInputDate,setCustomInputDate]=useState(null);
+  const [customText,setCustomText]=useState("");
+
   function assignEvent(date,event){
     setEventDays(prev=>{const rest=prev.filter(ed=>ed.date!==date);return event?[...rest,{date,event}].sort((a,b)=>a.date.localeCompare(b.date)):rest;});
     setAssigningDate(null);
+    setCustomInputDate(null);
+    setCustomText("");
   }
+  function submitCustom(date){
+    const val=customText.trim();
+    if(val) assignEvent(date,val);
+  }
+
+  const ALL_EVENTS=[
+    "Mehndi","Sangeet","Haldi","Wedding Ceremony","Reception",
+    "Pre-Wedding Shoot","Engagement","Tilak","Ring Ceremony",
+    "Garba Night","Cocktail Party","Baby Shower","Birthday","Corporate Event",
+  ];
+
   return (
     <div>
       <p style={{fontSize:10,fontFamily:"'DM Mono',monospace",letterSpacing:"0.1em",color:"#5a5048",textTransform:"uppercase",marginBottom:8}}>Assign Event to Each Day</p>
       {selectedDates.map(date=>{
         const assigned=eventDays.find(ed=>ed.date===date);
+        const isOpen=assigningDate===date;
+        const isCustom=customInputDate===date;
         return (
-          <div key={date} style={{background:"#0e0c0a",border:"1px solid #1e1a16",borderRadius:4,marginBottom:6,overflow:"hidden"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px"}}>
+          <div key={date} style={{background:"#0e0c0a",border:`1px solid ${assigned?"#2a2420":"#1e1a16"}`,borderRadius:6,marginBottom:8,overflow:"hidden"}}>
+            {/* Header row */}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px"}}>
               <span style={{fontFamily:"'DM Mono',monospace",fontSize:12,color:"#c9a96e"}}>{date}</span>
-              {assigningDate===date
-                ?<button onClick={()=>setAssigningDate(null)} style={{background:"none",border:"none",color:"#5a5048",fontSize:18}}>×</button>
-                :<button onClick={()=>setAssigningDate(date)} style={{background:assigned?evColor(assigned.event)+"22":"#1a1612",border:`1px solid ${assigned?evColor(assigned.event):"#2a2420"}`,color:assigned?evColor(assigned.event):"#5a5048",fontSize:10,padding:"4px 10px",borderRadius:2,fontFamily:"'DM Mono',monospace"}}>{assigned?assigned.event:"Assign"}</button>}
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                {assigned&&<span style={{fontSize:10,fontFamily:"'DM Mono',monospace",background:evColor(assigned.event)+"22",color:evColor(assigned.event),border:`1px solid ${evColor(assigned.event)}44`,padding:"3px 8px",borderRadius:2}}>{assigned.event}</span>}
+                {isOpen
+                  ?<button onClick={()=>{setAssigningDate(null);setCustomInputDate(null);setCustomText("");}} style={{background:"none",border:"none",color:"#5a5048",fontSize:20,lineHeight:1}}>×</button>
+                  :<button onClick={()=>{setAssigningDate(date);setCustomInputDate(null);}} style={{background:"#1a1612",border:"1px solid #2a2420",color:"#7a6f63",fontSize:11,padding:"5px 12px",borderRadius:3,fontFamily:"'DM Mono',monospace"}}>{assigned?"Change":"Assign +"}</button>
+                }
+              </div>
             </div>
-            {assigningDate===date&&(
-              <div style={{padding:"10px 12px",borderTop:"1px solid #1e1a16",background:"#080806"}}>
-                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                  {DEFAULT_EVENTS.map(ev=><button key={ev} onClick={()=>assignEvent(date,ev)} style={{background:evColor(ev)+"22",border:`1px solid ${evColor(ev)}44`,color:evColor(ev),fontSize:10,padding:"5px 10px",borderRadius:2,fontFamily:"'DM Mono',monospace"}}>{ev}</button>)}
+
+            {/* Event picker panel */}
+            {isOpen&&(
+              <div style={{borderTop:"1px solid #1e1a16",background:"#080806",padding:"14px"}}>
+                {/* Preset event buttons */}
+                <p style={{fontSize:9,fontFamily:"'DM Mono',monospace",color:"#3a3028",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:10}}>Quick Select</p>
+                <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>
+                  {ALL_EVENTS.map(ev=>(
+                    <button key={ev} onClick={()=>assignEvent(date,ev)}
+                      style={{background:assigned?.event===ev?evColor(ev)+"44":evColor(ev)+"18",border:`1px solid ${assigned?.event===ev?evColor(ev):evColor(ev)+"44"}`,color:evColor(ev),fontSize:11,padding:"6px 12px",borderRadius:3,fontFamily:"'DM Mono',monospace",fontWeight:assigned?.event===ev?"600":"400"}}>
+                      {ev}
+                    </button>
+                  ))}
                 </div>
-                {assigned&&<button onClick={()=>assignEvent(date,null)} style={{marginTop:8,background:"none",border:"none",color:"#f87171",fontSize:11,fontFamily:"'DM Mono',monospace",padding:0}}>Remove</button>}
+
+                {/* Custom / manual input */}
+                <p style={{fontSize:9,fontFamily:"'DM Mono',monospace",color:"#3a3028",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:8}}>Custom Event Name</p>
+                {isCustom
+                  ?<div style={{display:"flex",gap:8}}>
+                    <input
+                      autoFocus
+                      placeholder="e.g. Farewell Party, Pooja, Lunch..."
+                      value={customText}
+                      onChange={e=>setCustomText(e.target.value)}
+                      onKeyDown={e=>e.key==="Enter"&&submitCustom(date)}
+                      style={{flex:1,background:"#111",border:"1px solid #c9a96e55",color:"#e8e0d4",fontFamily:"'DM Mono',monospace",fontSize:13,padding:"9px 12px",borderRadius:4,outline:"none"}}
+                    />
+                    <button onClick={()=>submitCustom(date)} style={{background:"linear-gradient(135deg,#c9a96e,#a8814a)",color:"#0a0a0a",border:"none",padding:"9px 16px",borderRadius:4,fontSize:13,fontWeight:600,fontFamily:"'DM Mono',monospace"}}>Add</button>
+                    <button onClick={()=>{setCustomInputDate(null);setCustomText("");}} style={{background:"none",border:"1px solid #2a2420",color:"#5a5048",padding:"9px 12px",borderRadius:4,fontSize:13}}>✕</button>
+                  </div>
+                  :<button onClick={()=>setCustomInputDate(date)} style={{background:"#1a1612",border:"1px dashed #3a3028",color:"#5a5048",fontSize:11,padding:"8px 14px",borderRadius:3,fontFamily:"'DM Mono',monospace",width:"100%",textAlign:"left"}}>＋ Type custom event name…</button>
+                }
+
+                {/* Remove option */}
+                {assigned&&(
+                  <button onClick={()=>assignEvent(date,null)} style={{marginTop:12,background:"none",border:"none",color:"#f87171",fontSize:11,fontFamily:"'DM Mono',monospace",padding:0,display:"block"}}>✕ Remove assignment</button>
+                )}
               </div>
             )}
           </div>
