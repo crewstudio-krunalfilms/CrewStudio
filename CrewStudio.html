@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Crew Studio — Wedding Crew Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  :root{
+    --gold:#c9a96e;--gold2:#a8814a;--bg:#060504;--bg2:#0a0a0a;--bg3:#0e0c0a;
+    --border:#1e1a16;--border2:#2a2420;--text:#e8e0d4;--muted:#7a6f63;--faint:#5a5048;
+  }
+  html{scroll-behavior:smooth;}
+  body{background:var(--bg);color:var(--text);font-family:'Cormorant Garamond',Georgia,serif;overflow-x:hidden;}
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeUp{from{opacity:0;transform:translateY(30px);}to{opacity:1;transform:translateY(0);}}
+  @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+  @keyframes floatY{0%,100%{transform:translateY(0);}50%{transform:translateY(-12px);}}
+  @keyframes floatX{0%,100%{transform:translateX(0) rotate(-2deg);}50%{transform:translateX(8px) rotate(2deg);}}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 #c9a96e22;}50%{box-shadow:0 0 40px 10px #c9a96e18;}}
+  @keyframes shimmer{0%{background-position:-200% center;}100%{background-position:200% center;}}
+  @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+  @keyframes countUp{from{opacity:0;transform:scale(0.8);}to{opacity:1;transform:scale(1);}}
+  @keyframes slideRight{from{width:0;}to{width:100%;}}
+  @keyframes glowPulse{0%,100%{text-shadow:0 0 20px #c9a96e44;}50%{text-shadow:0 0 60px #c9a96eaa,0 0 100px #c9a96e44;}}
+  @keyframes particleFloat{0%{transform:translateY(100vh) rotate(0deg);opacity:0;}10%{opacity:1;}90%{opacity:1;}100%{transform:translateY(-10vh) rotate(720deg);opacity:0;}}
+  @keyframes screenSlide{0%{transform:translateX(100%);}100%{transform:translateX(0);}}
+  @keyframes borderGlow{0%,100%{border-color:#c9a96e33;}50%{border-color:#c9a96e99;}}
+
+  /* ── PARTICLES ── */
+  .particles{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden;}
+  .particle{position:absolute;width:2px;height:2px;background:var(--gold);border-radius:50%;animation:particleFloat linear infinite;opacity:0;}
+
+  /* ── HERO SECTION ── */
+  .hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;padding:40px 20px;text-align:center;}
+  .hero-bg{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 50%,#c9a96e0a 0%,transparent 70%);pointer-events:none;}
+  .hero-grid{position:absolute;inset:0;background-image:linear-gradient(#c9a96e08 1px,transparent 1px),linear-gradient(90deg,#c9a96e08 1px,transparent 1px);background-size:60px 60px;pointer-events:none;mask-image:radial-gradient(ellipse at center,black 30%,transparent 80%);}
+  .logo-ring{width:100px;height:100px;border-radius:24px;background:linear-gradient(135deg,#c9a96e,#a8814a);display:flex;align-items:center;justify-content:center;font-size:44px;margin:0 auto 32px;animation:pulse 3s ease infinite,floatY 4s ease-in-out infinite;box-shadow:0 0 0 1px #c9a96e44,0 20px 60px #c9a96e33;}
+  .hero-title{font-size:clamp(48px,8vw,96px);font-weight:300;letter-spacing:0.04em;line-height:1;animation:fadeUp 0.8s ease both;}
+  .hero-title span{color:var(--gold);font-family:'DM Mono',monospace;font-size:0.45em;letter-spacing:0.2em;display:block;margin-top:8px;animation:glowPulse 3s ease infinite;}
+  .hero-sub{font-size:18px;color:var(--muted);margin-top:24px;max-width:500px;line-height:1.7;animation:fadeUp 0.8s ease 0.2s both;}
+  .hero-cta{display:flex;gap:16px;margin-top:40px;flex-wrap:wrap;justify-content:center;animation:fadeUp 0.8s ease 0.4s both;}
+  .btn-primary{padding:16px 36px;background:linear-gradient(135deg,#c9a96e,#a8814a);color:#0a0a0a;border:none;border-radius:8px;font-size:17px;font-weight:600;cursor:pointer;font-family:'Cormorant Garamond',serif;letter-spacing:0.04em;transition:transform 0.2s,box-shadow 0.2s;}
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 40px #c9a96e44;}
+  .btn-secondary{padding:16px 36px;background:transparent;color:var(--gold);border:1px solid #c9a96e44;border-radius:8px;font-size:17px;cursor:pointer;font-family:'Cormorant Garamond',serif;transition:all 0.2s;}
+  .btn-secondary:hover{border-color:var(--gold);background:#c9a96e11;}
+  .hero-stats{display:flex;gap:40px;margin-top:60px;animation:fadeUp 0.8s ease 0.6s both;flex-wrap:wrap;justify-content:center;}
+  .hero-stat{text-align:center;}
+  .hero-stat-num{font-size:36px;font-weight:300;color:var(--gold);}
+  .hero-stat-label{font-size:11px;font-family:'DM Mono',monospace;color:var(--faint);letter-spacing:0.15em;text-transform:uppercase;margin-top:4px;}
+
+  /* ── SECTION ── */
+  section{padding:100px 20px;max-width:1200px;margin:0 auto;position:relative;}
+  .section-label{font-size:11px;font-family:'DM Mono',monospace;color:var(--gold);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:16px;}
+  .section-title{font-size:clamp(32px,5vw,56px);font-weight:300;line-height:1.1;margin-bottom:20px;}
+  .section-sub{font-size:16px;color:var(--muted);max-width:500px;line-height:1.7;}
+
+  /* ── DASHBOARD MOCKUP ── */
+  .mockup-wrap{position:relative;margin:60px auto 0;max-width:900px;}
+  .mockup-glow{position:absolute;inset:-40px;background:radial-gradient(ellipse,#c9a96e18 0%,transparent 70%);pointer-events:none;}
+  .mockup{background:var(--bg3);border:1px solid var(--border2);border-radius:16px;overflow:hidden;box-shadow:0 40px 120px #00000088,0 0 0 1px #c9a96e22;animation:floatY 6s ease-in-out infinite;}
+  .mockup-bar{background:#080604;border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;gap:8px;}
+  .dot{width:12px;height:12px;border-radius:50%;}
+  .dot-r{background:#f87171;}
+  .dot-y{background:#fbbf24;}
+  .dot-g{background:#4ade80;}
+  .mockup-url{flex:1;background:#0e0c0a;border:1px solid var(--border2);border-radius:4px;padding:5px 12px;font-size:12px;font-family:'DM Mono',monospace;color:var(--faint);margin:0 12px;text-align:center;}
+  .mockup-nav{background:#0a0806;border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:56px;}
+  .nav-brand{display:flex;align-items:center;gap:10px;}
+  .nav-logo{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#c9a96e,#a8814a);display:flex;align-items:center;justify-content:center;font-size:14px;}
+  .nav-name{font-size:18px;font-weight:300;letter-spacing:0.06em;}
+  .nav-name span{font-family:'DM Mono',monospace;font-size:11px;color:var(--gold);margin-left:6px;}
+  .nav-links{display:flex;gap:4px;}
+  .nav-link{padding:8px 16px;font-size:12px;font-family:'DM Mono',monospace;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid transparent;cursor:pointer;transition:all 0.2s;}
+  .nav-link.active{color:var(--gold);border-bottom-color:var(--gold);}
+  .mockup-body{padding:28px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
+  .stat-card{background:#080604;border:1px solid var(--border);border-radius:8px;padding:20px;}
+  .stat-card.gold{border-color:#c9a96e33;background:#c9a96e08;}
+  .stat-num{font-size:32px;font-weight:300;color:var(--gold);line-height:1;animation:countUp 0.6s ease both;}
+  .stat-label{font-size:10px;font-family:'DM Mono',monospace;color:var(--faint);letter-spacing:0.15em;text-transform:uppercase;margin-top:6px;}
+  .stat-trend{font-size:11px;color:#4ade80;margin-top:8px;font-family:'DM Mono',monospace;}
+
+  /* ── FEATURES GRID ── */
+  .features{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;margin-top:60px;}
+  .feature-card{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:32px;transition:all 0.3s;position:relative;overflow:hidden;}
+  .feature-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,#c9a96e08,transparent);opacity:0;transition:opacity 0.3s;}
+  .feature-card:hover{border-color:#c9a96e44;transform:translateY(-4px);box-shadow:0 20px 60px #00000066;}
+  .feature-card:hover::before{opacity:1;}
+  .feature-icon{font-size:32px;margin-bottom:20px;}
+  .feature-title{font-size:22px;font-weight:400;margin-bottom:10px;}
+  .feature-desc{font-size:14px;color:var(--muted);line-height:1.7;}
+  .feature-tag{display:inline-block;margin-top:16px;font-size:10px;font-family:'DM Mono',monospace;color:var(--gold);background:#c9a96e15;border:1px solid #c9a96e33;padding:3px 10px;border-radius:2px;letter-spacing:0.1em;text-transform:uppercase;}
+
+  /* ── PHONE MOCKUP ── */
+  .phone-section{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center;padding:100px 20px;max-width:1200px;margin:0 auto;}
+  .phone-wrap{position:relative;display:flex;justify-content:center;}
+  .phone{width:280px;background:#0a0806;border:2px solid var(--border2);border-radius:40px;padding:12px;box-shadow:0 40px 100px #00000099,0 0 0 1px #c9a96e22;animation:floatY 5s ease-in-out infinite;}
+  .phone-screen{background:var(--bg2);border-radius:30px;overflow:hidden;}
+  .phone-header{background:#0e0c0a;padding:16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);}
+  .phone-title{font-size:16px;font-weight:500;}
+  .phone-badge{background:#c9a96e22;border:1px solid #c9a96e44;color:var(--gold);font-size:10px;font-family:'DM Mono',monospace;padding:2px 8px;border-radius:2px;}
+  .phone-body{padding:16px;display:flex;flex-direction:column;gap:10px;}
+  .phone-card{background:#0e0c0a;border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:6px;padding:12px;}
+  .phone-card-name{font-size:14px;font-weight:500;}
+  .phone-card-role{font-size:11px;font-family:'DM Mono',monospace;color:var(--gold);margin-top:2px;}
+  .phone-card-info{font-size:11px;color:var(--faint);margin-top:4px;font-family:'DM Mono',monospace;}
+  .phone-card-status{display:inline-block;margin-top:6px;font-size:9px;font-family:'DM Mono',monospace;padding:2px 8px;border-radius:2px;}
+  .status-confirmed{background:#4ade8022;color:#4ade80;border:1px solid #4ade8033;}
+  .status-pending{background:#fbbf2422;color:#fbbf24;border:1px solid #fbbf2433;}
+  .phone-text-wrap{display:flex;flex-direction:column;gap:24px;}
+  .step{display:flex;gap:20px;align-items:flex-start;}
+  .step-num{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#c9a96e,#a8814a);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:#0a0a0a;flex-shrink:0;font-family:'DM Mono',monospace;}
+  .step-content{}
+  .step-title{font-size:20px;font-weight:400;margin-bottom:6px;}
+  .step-desc{font-size:14px;color:var(--muted);line-height:1.6;}
+
+  /* ── CALENDAR MOCKUP ── */
+  .cal-section{background:var(--bg3);border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:100px 20px;}
+  .cal-inner{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:1fr 1.2fr;gap:60px;align-items:center;}
+  .cal-mockup{background:var(--bg2);border:1px solid var(--border2);border-radius:12px;padding:20px;box-shadow:0 20px 60px #00000066;animation:floatY 7s ease-in-out infinite;}
+  .cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+  .cal-title{font-size:14px;font-family:'DM Mono',monospace;color:var(--text);}
+  .cal-arrows{display:flex;gap:8px;}
+  .cal-arrow{background:#1a1612;border:1px solid var(--border2);color:var(--gold);width:28px;height:28px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+  .cal-day-name{text-align:center;font-size:9px;font-family:'DM Mono',monospace;color:var(--faint);padding:4px 0;}
+  .cal-day{text-align:center;padding:8px 4px;border-radius:4px;font-size:12px;font-family:'DM Mono',monospace;cursor:pointer;transition:all 0.15s;position:relative;}
+  .cal-day:hover{background:#1a1612;}
+  .cal-day.has-event::after{content:'';position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--gold);}
+  .cal-day.selected{background:var(--gold);color:#0a0a0a;}
+  .cal-day.pink::after{background:#f472b6;}
+  .cal-day.purple::after{background:#a78bfa;}
+  .cal-day.blue::after{background:#60a5fa;}
+  .cal-day.green::after{background:#4ade80;}
+  .event-list{display:flex;flex-direction:column;gap:8px;margin-top:16px;}
+  .event-item{background:#0e0c0a;border:1px solid var(--border);border-left:3px solid;border-radius:4px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;}
+  .event-name{font-size:13px;}
+  .event-date{font-size:11px;font-family:'DM Mono',monospace;color:var(--faint);}
+  .event-crew{font-size:11px;font-family:'DM Mono',monospace;color:var(--gold);}
+
+  /* ── WA SECTION ── */
+  .wa-section{padding:100px 20px;max-width:1200px;margin:0 auto;display:grid;grid-template-columns:1.2fr 1fr;gap:60px;align-items:center;}
+  .wa-mockup{background:#111b21;border-radius:12px;overflow:hidden;box-shadow:0 20px 60px #00000088;animation:floatX 6s ease-in-out infinite;}
+  .wa-header{background:#1f2c34;padding:14px 16px;display:flex;align-items:center;gap:12px;}
+  .wa-avatar{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#c9a96e,#a8814a);display:flex;align-items:center;justify-content:center;font-size:18px;}
+  .wa-name{font-size:15px;font-weight:500;color:#e9edef;}
+  .wa-status{font-size:12px;color:#8696a0;}
+  .wa-body{padding:16px;display:flex;flex-direction:column;gap:10px;background:#0b141a;min-height:280px;}
+  .wa-msg{max-width:80%;padding:8px 12px;border-radius:8px;font-size:13px;line-height:1.5;}
+  .wa-msg.sent{background:#005c4b;color:#e9edef;align-self:flex-end;border-radius:8px 8px 2px 8px;}
+  .wa-msg.recv{background:#1f2c34;color:#e9edef;align-self:flex-start;border-radius:8px 8px 8px 2px;}
+  .wa-time{font-size:10px;color:#8696a0;margin-top:4px;text-align:right;}
+  .wa-tick{color:#53bdeb;}
+
+  /* ── TESTIMONIAL ── */
+  .testimonials{background:var(--bg3);border-top:1px solid var(--border);padding:100px 20px;}
+  .test-inner{max-width:1000px;margin:0 auto;text-align:center;}
+  .test-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;margin-top:60px;}
+  .test-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:28px;text-align:left;}
+  .test-stars{color:var(--gold);font-size:16px;margin-bottom:16px;letter-spacing:2px;}
+  .test-text{font-size:16px;color:var(--muted);line-height:1.7;font-style:italic;}
+  .test-author{margin-top:20px;display:flex;align-items:center;gap:12px;}
+  .test-avatar{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#c9a96e,#a8814a);display:flex;align-items:center;justify-content:center;color:#0a0a0a;font-weight:600;font-size:14px;}
+  .test-name{font-size:15px;font-weight:500;}
+  .test-role{font-size:11px;font-family:'DM Mono',monospace;color:var(--faint);}
+
+  /* ── CTA SECTION ── */
+  .cta-section{padding:120px 20px;text-align:center;position:relative;overflow:hidden;}
+  .cta-glow{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:600px;height:600px;background:radial-gradient(circle,#c9a96e15,transparent 70%);pointer-events:none;}
+  .cta-title{font-size:clamp(36px,6vw,72px);font-weight:300;line-height:1.1;margin-bottom:24px;animation:glowPulse 3s ease infinite;}
+  .cta-sub{font-size:18px;color:var(--muted);margin-bottom:40px;}
+  .cta-link{display:inline-block;font-size:14px;font-family:'DM Mono',monospace;color:var(--gold);border:1px solid #c9a96e44;padding:12px 24px;border-radius:4px;margin-top:20px;letter-spacing:0.1em;animation:borderGlow 2s ease infinite;}
+
+  /* ── FOOTER ── */
+  footer{border-top:1px solid var(--border);padding:40px 20px;text-align:center;}
+  .footer-brand{font-size:24px;font-weight:300;letter-spacing:0.06em;margin-bottom:8px;}
+  .footer-brand span{font-family:'DM Mono',monospace;font-size:12px;color:var(--gold);margin-left:8px;}
+  .footer-text{font-size:11px;font-family:'DM Mono',monospace;color:var(--faint);letter-spacing:0.1em;}
+
+  /* ── DIVIDER ── */
+  .divider{width:48px;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin:24px auto;}
+
+  /* ── SCROLL REVEAL ── */
+  .reveal{opacity:0;transform:translateY(30px);transition:opacity 0.8s ease,transform 0.8s ease;}
+  .reveal.visible{opacity:1;transform:translateY(0);}
+
+  /* ── FLOATING BADGE ── */
+  .float-badge{position:fixed;bottom:30px;right:30px;background:linear-gradient(135deg,#c9a96e,#a8814a);color:#0a0a0a;padding:14px 24px;border-radius:50px;font-size:14px;font-weight:600;font-family:'Cormorant Garamond',serif;box-shadow:0 8px 32px #c9a96e44;cursor:pointer;z-index:100;animation:floatY 3s ease-in-out infinite;transition:transform 0.2s;}
+  .float-badge:hover{transform:scale(1.05);}
+
+@media (max-width:768px){
+.float-badge{
+right:10px !important;
+left:10px !important;
+bottom:10px !important;
+width:auto !important;
+text-align:center !important;
+font-size:13px !important;
+padding:12px !important;
+}
+}
+
+</style>
+
+<style id="mobile-fix">
+@media (max-width: 768px){
+  .phone-section,
+  .cal-inner,
+  .wa-section{
+    grid-template-columns:1fr !important;
+    gap:30px !important;
+  }
+
+  .mockup-body{
+    grid-template-columns:1fr !important;
+  }
+
+  .hero-title{
+    font-size:42px !important;
+  }
+
+  .hero-stats{
+    gap:20px !important;
+  }
+
+  .features{
+    grid-template-columns:1fr !important;
+  }
+
+  .nav-links{
+    display:none !important;
+  }
+
+  .mockup-url{
+    font-size:10px !important;
+    overflow:hidden;
+  }
+
+  .float-badge{
+    right:15px !important;
+    bottom:15px !important;
+    padding:12px 18px !important;
+    font-size:12px !important;
+  }
+
+  section,
+  .phone-section,
+  .wa-section,
+  .cal-section,
+  .testimonials,
+  .cta-section{
+    padding:60px 16px !important;
+  }
+
+  .phone{
+    width:100% !important;
+    max-width:300px !important;
+  }
+}
+</style>
+
+</head>
+<body>
+
+<!-- Particles -->
+<div class="particles" id="particles"></div>
+
+<!-- ── HERO ── -->
+<div class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-grid"></div>
+  <div class="logo-ring">🎬</div>
+  <h1 class="hero-title">
+    CREW STUDIO
+    <span>WEDDING CREW MANAGEMENT</span>
+  </h1>
+  <p class="hero-sub">Stop managing weddings through endless WhatsApp chats. Crew Studio organizes your entire team, schedule and bookings in one place.</p>
+  <div class="hero-cta">
+    <button class="btn-primary" onclick="window.open('https://crewstudio-krunalfilms.github.io/CrewStudio/', '_blank')">Join Beta Access →</button>
+    <button class="btn-secondary" onclick="window.open('https://crewstudio-krunalfilms.github.io/CrewStudio/', '_blank')">Visit Website</button>
+  </div>
+  <div class="hero-stats">
+    <div class="hero-stat"><div class="hero-stat-num">500+</div><div class="hero-stat-label">Studios</div></div>
+    <div class="hero-stat"><div class="hero-stat-num">12k+</div><div class="hero-stat-label">Events Managed</div></div>
+    <div class="hero-stat"><div class="hero-stat-num">98%</div><div class="hero-stat-label">Satisfaction</div></div>
+    <div class="hero-stat"><div class="hero-stat-num">Free</div><div class="hero-stat-label">now</div></div>
+  </div>
+</div>
+
+<!-- ── DASHBOARD MOCKUP ── -->
+<section class="reveal">
+  <div class="section-label">Dashboard</div>
+  <h2 class="section-title">Everything at a glance</h2>
+  <p class="section-sub">Your entire crew operation on one beautiful dashboard. Real-time stats, upcoming events, and team payouts.</p>
+  <div class="mockup-wrap">
+    <div class="mockup-glow"></div>
+    <div class="mockup">
+      <div class="mockup-bar">
+        <div class="dot dot-r"></div>
+        <div class="dot dot-y"></div>
+        <div class="dot dot-g"></div>
+        <div class="mockup-url">crewstudio-krunalfilms.github.io/CrewStudio</div>
+      </div>
+      <div class="mockup-nav">
+        <div class="nav-brand">
+          <div class="nav-logo">🎬</div>
+          <div class="nav-name">CREW <span>STUDIO</span></div>
+        </div>
+        <div class="nav-links">
+          <div class="nav-link active">Dashboard</div>
+          <div class="nav-link">Team</div>
+          <div class="nav-link">Events</div>
+          <div class="nav-link">Calendar</div>
+          <div class="nav-link">Profile</div>
+        </div>
+      </div>
+      <div class="mockup-body">
+        <div class="stat-card gold"><div class="stat-num">24</div><div class="stat-label">Team Members</div><div class="stat-trend">↑ 3 this month</div></div>
+        <div class="stat-card"><div class="stat-num">18</div><div class="stat-label">Active Weddings</div><div class="stat-trend">↑ 5 upcoming</div></div>
+        <div class="stat-card gold"><div class="stat-num">₹4.2L</div><div class="stat-label">Est. Revenue</div><div class="stat-trend">↑ 12% vs last month</div></div>
+        <div class="stat-card"><div class="stat-num">86</div><div class="stat-label">Total Hires</div></div>
+        <div class="stat-card"><div class="stat-num" style="color:#4ade80">72</div><div class="stat-label">Confirmed</div></div>
+        <div class="stat-card"><div class="stat-num" style="color:#fbbf24">14</div><div class="stat-label">Pending</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FEATURES ── -->
+<section class="reveal">
+  <div class="section-label">Features</div>
+  <h2 class="section-title">Built for wedding studios</h2>
+  <div class="divider"></div>
+  <div class="features">
+    <div class="feature-card">
+      <div class="feature-icon">📸</div>
+      <div class="feature-title">Smart Crew Assignment</div>
+      <div class="feature-desc">Assign photographers, videographers, editors and more to any event in seconds. Track roles, day types and availability.</div>
+      <div class="feature-tag">Instant Assignment</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">💬</div>
+      <div class="feature-title">WhatsApp Notifications</div>
+      <div class="feature-desc">Send booking confirmations directly via WhatsApp with one tap. Custom message templates for every scenario.</div>
+      <div class="feature-tag">One Tap Send</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📅</div>
+      <div class="feature-title">Visual Calendar</div>
+      <div class="feature-desc">See your entire schedule at a glance. Color-coded events, crew availability, and booking conflicts — all visible instantly.</div>
+      <div class="feature-tag">Color Coded</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">💰</div>
+      <div class="feature-title">Payment Tracking</div>
+      <div class="feature-desc">Track paid and unpaid amounts for every crew member. Know exactly who to pay and how much, always.</div>
+      <div class="feature-tag">Full Tracking</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔗</div>
+      <div class="feature-title">Crew Portal</div>
+      <div class="feature-desc">Each crew member gets their own portal link to view schedule, confirm bookings and see full event details.</div>
+      <div class="feature-tag">Self-Service</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">☁️</div>
+      <div class="feature-title">Cloud Sync</div>
+      <div class="feature-desc">All data syncs instantly across devices via Firebase. Access your studio from phone, tablet or desktop anytime.</div>
+      <div class="feature-tag">Real-time Sync</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── PHONE MOCKUP ── -->
+<div class="phone-section reveal">
+  <div class="phone-text-wrap">
+    <div class="section-label">Crew Portal</div>
+    <h2 class="section-title">Your crew on mobile</h2>
+    <p class="section-sub" style="margin-bottom:40px;">Each crew member gets a private portal. View schedule, confirm bookings, see event details — from any phone.</p>
+    <div class="step"><div class="step-num">1</div><div class="step-content"><div class="step-title">Select your name</div><div class="step-desc">Crew members pick their name from the team list and enter their password.</div></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-content"><div class="step-title">View your schedule</div><div class="step-desc">See all upcoming bookings, event details, locations and timing.</div></div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-content"><div class="step-title">Confirm with one tap</div><div class="step-desc">Confirm or decline bookings instantly. Admin gets notified on WhatsApp automatically.</div></div></div>
+  </div>
+  <div class="phone-wrap">
+    <div class="phone">
+      <div class="phone-screen">
+        <div class="phone-header">
+          <div class="phone-title">My Schedule</div>
+          <div class="phone-badge">3 Upcoming</div>
+        </div>
+        <div class="phone-body">
+          <div class="phone-card">
+            <div class="phone-card-name">Sharma Wedding</div>
+            <div class="phone-card-role">📸 Cinematographer</div>
+            <div class="phone-card-info">📅 Dec 15 · ⏰ 9:00AM · Full Day</div>
+            <span class="phone-card-status status-confirmed">✓ Confirmed</span>
+          </div>
+          <div class="phone-card" style="border-left-color:#a78bfa">
+            <div class="phone-card-name">Patel Reception</div>
+            <div class="phone-card-role" style="color:#a78bfa">🎬 Videographer</div>
+            <div class="phone-card-info">📅 Dec 18 · ⏰ 6:00PM · Full Day</div>
+            <span class="phone-card-status status-pending">⏳ Pending</span>
+          </div>
+          <div class="phone-card" style="border-left-color:#60a5fa">
+            <div class="phone-card-name">Mehta Sangeet</div>
+            <div class="phone-card-role" style="color:#60a5fa">🎞 Candid</div>
+            <div class="phone-card-info">📅 Dec 22 · ⏰ 7:00PM · Half Day</div>
+            <span class="phone-card-status status-pending">⏳ Pending</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── CALENDAR ── -->
+<div class="cal-section reveal">
+  <div class="cal-inner">
+    <div>
+      <div class="section-label">Calendar</div>
+      <h2 class="section-title">Never miss a booking</h2>
+      <p class="section-sub">Color-coded calendar shows all events at a glance. See crew assignments, conflicts and availability instantly.</p>
+    </div>
+    <div class="cal-mockup">
+      <div class="cal-header">
+        <div class="cal-title">December 2025</div>
+        <div class="cal-arrows">
+          <div class="cal-arrow">‹</div>
+          <div class="cal-arrow">›</div>
+        </div>
+      </div>
+      <div class="cal-grid">
+        <div class="cal-day-name">S</div><div class="cal-day-name">M</div><div class="cal-day-name">T</div><div class="cal-day-name">W</div><div class="cal-day-name">T</div><div class="cal-day-name">F</div><div class="cal-day-name">S</div>
+        <div class="cal-day"></div><div class="cal-day">1</div><div class="cal-day">2</div><div class="cal-day">3</div><div class="cal-day">4</div><div class="cal-day">5</div><div class="cal-day has-event pink">6</div>
+        <div class="cal-day">7</div><div class="cal-day">8</div><div class="cal-day has-event purple">9</div><div class="cal-day">10</div><div class="cal-day">11</div><div class="cal-day has-event">12</div><div class="cal-day">13</div>
+        <div class="cal-day">14</div><div class="cal-day selected">15</div><div class="cal-day">16</div><div class="cal-day has-event blue">17</div><div class="cal-day has-event">18</div><div class="cal-day">19</div><div class="cal-day">20</div>
+        <div class="cal-day has-event purple">21</div><div class="cal-day has-event green">22</div><div class="cal-day">23</div><div class="cal-day">24</div><div class="cal-day has-event">25</div><div class="cal-day">26</div><div class="cal-day">27</div>
+        <div class="cal-day">28</div><div class="cal-day has-event pink">29</div><div class="cal-day">30</div><div class="cal-day has-event">31</div>
+      </div>
+      <div class="event-list">
+        <div class="event-item" style="border-left-color:#c9a96e"><div><div class="event-name">Sharma Wedding Ceremony</div><div class="event-date">Dec 15 · 9:00 AM</div></div><div class="event-crew">4 crew</div></div>
+        <div class="event-item" style="border-left-color:#a78bfa"><div><div class="event-name">Patel Sangeet Night</div><div class="event-date">Dec 17 · 7:00 PM</div></div><div class="event-crew">3 crew</div></div>
+        <div class="event-item" style="border-left-color:#60a5fa"><div><div class="event-name">Mehta Reception</div><div class="event-date">Dec 18 · 6:00 PM</div></div><div class="event-crew">5 crew</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── WHATSAPP ── -->
+<div class="wa-section reveal">
+  <div>
+    <div class="section-label">WhatsApp Integration</div>
+    <h2 class="section-title">Instant crew notifications</h2>
+    <p class="section-sub" style="margin-bottom:32px;">Send booking confirmations, reminders and updates directly via WhatsApp. Custom templates, one tap sending.</p>
+    <div class="features" style="grid-template-columns:1fr 1fr;margin-top:0;gap:16px;">
+      <div class="feature-card" style="padding:20px"><div class="feature-icon" style="font-size:20px;margin-bottom:10px">📤</div><div class="feature-title" style="font-size:16px">Booking Alert</div><div class="feature-desc" style="font-size:13px">Crew gets notified instantly when assigned</div></div>
+      <div class="feature-card" style="padding:20px"><div class="feature-icon" style="font-size:20px;margin-bottom:10px">✅</div><div class="feature-title" style="font-size:16px">Confirmation</div><div class="feature-desc" style="font-size:13px">One tap confirm or decline from portal</div></div>
+    </div>
+  </div>
+  <div class="wa-mockup">
+    <div class="wa-header">
+      <div class="wa-avatar">📸</div>
+      <div><div class="wa-name">Dhruv Sukhanadi</div><div class="wa-status">online</div></div>
+    </div>
+    <div class="wa-body">
+      <div class="wa-msg sent">
+        Hi Dhruv! You've been booked:<br><br>
+        💍 <b>Sharma Wedding</b><br>
+        🎬 <b>Wedding Ceremony</b><br>
+        📅 <b>Dec 15, 2025</b><br>
+        🎭 Cinematographer<br>
+        ⏱ Full Day<br>
+        💰 ₹8,000<br><br>
+        Please confirm.
+        <div class="wa-time">10:32 AM <span class="wa-tick">✓✓</span></div>
+      </div>
+      <div class="wa-msg recv">
+        Hi! I want to CONFIRM my booking 📅 Dec 15 💍 Sharma Wedding ✅
+        <div class="wa-time">10:35 AM</div>
+      </div>
+      <div class="wa-msg sent">
+        Perfect! See you there 🎬
+        <div class="wa-time">10:36 AM <span class="wa-tick">✓✓</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── TESTIMONIALS ── -->
+<div class="testimonials reveal">
+  <div class="test-inner">
+    <div class="section-label">Testimonials</div>
+    <h2 class="section-title">Loved by wedding studios</h2>
+    <div class="divider"></div>
+    <div class="test-grid">
+      <div class="test-card">
+        <div class="test-stars">★★★★★</div>
+        <div class="test-text">"Crew Studio completely transformed how I manage my team. WhatsApp notifications alone saved me hours every week."</div>
+        <div class="test-author"><div class="test-avatar">KP</div><div><div class="test-name">Krunal Prajapati</div><div class="test-role">Krunalfilms · Ahmedabad</div></div></div>
+      </div>
+      <div class="test-card">
+        <div class="test-stars">★★★★★</div>
+        <div class="test-text">"The crew portal is brilliant. My team can confirm bookings on their phone without calling me. Game changer!"</div>
+        <div class="test-author"><div class="test-avatar">RS</div><div><div class="test-name">Rahul Shah</div><div class="test-role">RS Photography · Surat</div></div></div>
+      </div>
+      <div class="test-card">
+        <div class="test-stars">★★★★★</div>
+        <div class="test-text">"Finally a tool built for Indian wedding studios. The calendar view and payment tracking are exactly what I needed."</div>
+        <div class="test-author"><div class="test-avatar">PM</div><div><div class="test-name">Priya Mehta</div><div class="test-role">Frames by Priya · Mumbai</div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── CTA ── -->
+<div class="cta-section reveal">
+  <div class="cta-glow"></div>
+  <div class="section-label">Get Started</div>
+  <h2 class="cta-title">Your Wedding Crew,<br/>Organized.</h2>
+  <p class="cta-sub">Free During Beta. Limited Early Access Available.</p>
+  <button class="btn-primary" style="font-size:20px;padding:20px 48px;" onclick="window.open('https://crewstudio-krunalfilms.github.io/CrewStudio/', '_blank')">Join Beta Access →</button>
+  <div><a class="cta-link" href="https://crewstudio-krunalfilms.github.io/CrewStudio/" target="_blank">Open Crew Studio</a></div>
+</div>
+
+<!-- ── FOOTER ── -->
+<footer>
+  <div class="footer-brand">CREW <span>STUDIO</span></div>
+  <div class="divider"></div>
+  <div class="footer-text">BUILT BY KRUNAL PRAJAPATI · KRUNALFILMS.IN · AHMEDABAD</div>
+</footer>
+
+<!-- Floating CTA -->
+<div class="float-badge" onclick="window.open('https://crewstudio-krunalfilms.github.io/CrewStudio/', '_blank')">🚀 Join Beta</div>
+
+<script>
+  // Particles
+  const container = document.getElementById('particles');
+  for(let i=0;i<30;i++){
+    const p=document.createElement('div');
+    p.className='particle';
+    p.style.left=Math.random()*100+'%';
+    p.style.animationDelay=Math.random()*20+'s';
+    p.style.animationDuration=(15+Math.random()*20)+'s';
+    p.style.width=p.style.height=(1+Math.random()*2)+'px';
+    p.style.opacity=Math.random()*0.6;
+    container.appendChild(p);
+  }
+
+  // Scroll reveal
+  const reveals=document.querySelectorAll('.reveal');
+  const obs=new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');}});
+  },{threshold:0.1});
+  reveals.forEach(r=>obs.observe(r));
+
+  // Nav active on scroll
+  const sections=document.querySelectorAll('section,[class$="-section"]');
+</script>
+</body>
+</html>
