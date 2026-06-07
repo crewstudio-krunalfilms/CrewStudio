@@ -1,5 +1,38 @@
 import { useState, useMemo, useEffect, useCallback, createContext, useContext } from "react";
 
+/* ─── Firebase Auth (Google Sign-In) ────────────────────────── */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyC37gaDS-MqZS6IB4Oz_gqCfHD357id-cE",
+  authDomain: "crewstudiov2.firebaseapp.com",
+  databaseURL: "https://crewstudiov2-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "crewstudiov2",
+  storageBucket: "crewstudiov2.firebasestorage.app",
+  messagingSenderId: "910832492151",
+  appId: "1:910832492151:web:efa4e4c310f4af6ae67072",
+};
+function getFirebaseAuth() {
+  try {
+    if (!window._fbAppInit) {
+      if (!window.firebase.apps?.length) window.firebase.initializeApp(FIREBASE_CONFIG);
+      window._fbAppInit = true;
+    }
+    return window.firebase.auth();
+  } catch(e) { console.error("Firebase Auth not available:", e); return null; }
+}
+async function signInWithGoogle() {
+  const auth = getFirebaseAuth();
+  if (!auth) throw new Error("Firebase Auth not loaded");
+  const provider = new window.firebase.auth.GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
+  const result = await auth.signInWithPopup(provider);
+  return result.user;
+}
+async function signOutGoogle() {
+  const auth = getFirebaseAuth();
+  if (auth) await auth.signOut();
+}
+
+
 /* ─── Constants ─────────────────────────────────────────────── */
 const ROLES = [
   "Cinematographer","Videographer","Photographer","Candid Photographer",
@@ -254,6 +287,45 @@ function AuthPage({ onLogin }) {
     } catch {setSignupError("Registration failed.");setLoading(false);}
   }
 
+  async function handleGoogleLogin() {
+    setError(""); setLoading(true);
+    try {
+      const gUser = await signInWithGoogle();
+      const email = gUser.email.toLowerCase();
+      const displayName = gUser.displayName || email.split("@")[0];
+      const photo = gUser.photoURL || "";
+      // Check if admin exists in Firebase
+      let admins = await fbGetAdmins();
+      let found = admins.find(a => a.email.toLowerCase() === email);
+      if (!found) {
+        // Auto-register Google user
+        const newAdmin = {
+          id: "google_" + gUser.uid,
+          name: displayName,
+          studioName: displayName + "'s Studio",
+          email: email,
+          password: "",
+          phone: "",
+          city: "",
+          photo: photo,
+          googleUid: gUser.uid,
+          createdAt: new Date().toISOString(),
+        };
+        await fbSaveAdmin(newAdmin);
+        await fbSet(`crew_team_google_${gUser.uid}`, []);
+        await fbSet(`crew_weddings_google_${gUser.uid}`, []);
+        await fbSet(`crew_profile_google_${gUser.uid}`, { adminName: displayName, studioName: displayName + "'s Studio", waNumber: "", city: "" });
+        found = newAdmin;
+      }
+      const user = { name: found.name, email: found.email, loggedIn: true, adminId: found.id, studioName: found.studioName, photo: found.photo || photo, googleUid: gUser.uid };
+      saveState("crew_session", user);
+      onLogin(user);
+    } catch(e) {
+      setError("Google sign-in failed. Please try again.");
+      setLoading(false);
+    }
+  }
+
   const S=`@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Mono:wght@300;400&display=swap');
   *{box-sizing:border-box;margin:0;padding:0;}
   input{background:#0e0c0a;border:1px solid #2a2420;color:#e8e0d4;font-family:'DM Mono',monospace;font-size:14px;padding:14px 16px;border-radius:6px;outline:none;width:100%;transition:border-color 0.25s,box-shadow 0.25s;}
@@ -299,6 +371,15 @@ function AuthPage({ onLogin }) {
           <button onClick={handleSignup} disabled={loading} style={{width:"100%",marginTop:20,padding:"16px",background:loading?"#5a4a2a":"linear-gradient(135deg,#c9a96e,#a8814a)",color:"#0a0a0a",border:"none",borderRadius:8,fontSize:17,fontWeight:600,cursor:loading?"not-allowed":"pointer",fontFamily:"'Cormorant Garamond',Georgia,serif"}}>
             {loading?"Creating…":"Create Account →"}
           </button>
+          <div style={{margin:"16px 0",display:"flex",alignItems:"center",gap:12}}>
+            <div style={{flex:1,height:1,background:"#1e1a16"}}/>
+            <span style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"#3a3028",letterSpacing:"0.1em"}}>OR</span>
+            <div style={{flex:1,height:1,background:"#1e1a16"}}/>
+          </div>
+          <button onClick={handleGoogleLogin} disabled={loading} style={{width:"100%",padding:"14px 16px",background:"#ffffff",color:"#1f1f1f",border:"1px solid #ddd",borderRadius:8,fontSize:15,fontWeight:500,cursor:loading?"not-allowed":"pointer",fontFamily:"'DM Mono',monospace",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
+            <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
+            Continue with Google
+          </button>
           <div style={{marginTop:16,textAlign:"center"}}>
             <button onClick={()=>{setMode("login");setSignupError("");}} style={{background:"none",border:"none",color:"#5a5048",fontSize:13,fontFamily:"'DM Mono',monospace",cursor:"pointer"}}>Already have account? <span style={{color:"#c9a96e"}}>Sign in →</span></button>
           </div>
@@ -337,7 +418,16 @@ function AuthPage({ onLogin }) {
           <button onClick={handleLogin} disabled={loading} style={{width:"100%",marginTop:20,padding:"16px",background:loading?"#5a4a2a":"linear-gradient(135deg,#c9a96e,#a8814a)",color:"#0a0a0a",border:"none",borderRadius:8,fontSize:17,fontWeight:600,cursor:loading?"not-allowed":"pointer",fontFamily:"'Cormorant Garamond',Georgia,serif",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
             {loading?<><div style={{width:18,height:18,border:"2px solid #0a0a0a44",borderTopColor:"#0a0a0a",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/> Signing in…</>:"Sign In →"}
           </button>
-          <div style={{marginTop:20,textAlign:"center"}}>
+          <div style={{margin:"20px 0",display:"flex",alignItems:"center",gap:12}}>
+            <div style={{flex:1,height:1,background:"#1e1a16"}}/>
+            <span style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"#3a3028",letterSpacing:"0.1em"}}>OR</span>
+            <div style={{flex:1,height:1,background:"#1e1a16"}}/>
+          </div>
+          <button onClick={handleGoogleLogin} disabled={loading} style={{width:"100%",padding:"14px 16px",background:"#ffffff",color:"#1f1f1f",border:"1px solid #ddd",borderRadius:8,fontSize:15,fontWeight:500,cursor:loading?"not-allowed":"pointer",fontFamily:"'DM Mono',monospace",display:"flex",alignItems:"center",justifyContent:"center",gap:12,letterSpacing:"0.02em"}}>
+            <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
+            Continue with Google
+          </button>
+          <div style={{marginTop:16,textAlign:"center"}}>
             <button onClick={()=>{setMode("signup");setError("");}} style={{background:"none",border:"none",color:"#5a5048",fontSize:13,fontFamily:"'DM Mono',monospace",cursor:"pointer"}}>New to Crew Studio? <span style={{color:"#c9a96e"}}>Create account →</span></button>
           </div>
           <div style={{marginTop:32,paddingTop:24,borderTop:"1px solid #1a1612",textAlign:"center"}}>
